@@ -98,7 +98,7 @@ else:
     default_db_uri = f"mysql+mysqlconnector://{db_user}@{db_host}:{db_port}/{db_name}"
 
 # Secret Key Configuration (Hardened Environment-Specific Resolution)
-raw_secret = os.environ.get('THIRDEYE_SECRET_KEY')
+raw_secret = os.environ.get('THIRDEYE_SECRET_KEY') or os.environ.get('SECRET_KEY')
 if raw_secret:
     raw_secret = raw_secret.strip()
 
@@ -127,7 +127,15 @@ else:
             RuntimeWarning
         )
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', default_db_uri)
+db_uri_env = os.environ.get('SQLALCHEMY_DATABASE_URI') or os.environ.get('DATABASE_URL')
+if db_uri_env:
+    if db_uri_env.startswith('mysql://'):
+        db_uri_env = db_uri_env.replace('mysql://', 'mysql+mysqlconnector://', 1)
+    elif db_uri_env.startswith('postgres://'):
+        db_uri_env = db_uri_env.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri_env
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = default_db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 app.config['MAX_FORM_MEMORY_SIZE'] = 50 * 1024 * 1024
