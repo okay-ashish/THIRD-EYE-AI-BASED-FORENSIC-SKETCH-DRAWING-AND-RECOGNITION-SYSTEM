@@ -1,12 +1,14 @@
 # syntax=docker/dockerfile:1
 FROM python:3.11-slim-bookworm
 
-# Set environment variables for production
+# Set environment variables for production and memory-safe build
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     PORT=5000 \
-    FLASK_ENV=production
+    FLASK_ENV=production \
+    CMAKE_BUILD_PARALLEL_LEVEL=1 \
+    DLIB_NO_GUI_SUPPORT=ON
 
 # Install essential system build dependencies for dlib, OpenCV, and OpenBLAS
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,6 +28,9 @@ WORKDIR /app
 # Upgrade pip and install CPU-optimized PyTorch first (avoids multi-gigabyte CUDA bloat)
 RUN pip install --no-cache-dir --upgrade pip "setuptools<82" wheel && \
     pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Build dlib with single-core compiler to stay well under Render build memory limits (<500MB)
+RUN pip install --no-cache-dir dlib
 
 # Copy and install Python dependencies
 COPY requirements.txt .
