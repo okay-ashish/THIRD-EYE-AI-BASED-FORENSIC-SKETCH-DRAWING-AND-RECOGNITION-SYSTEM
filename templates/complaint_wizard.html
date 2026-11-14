@@ -1,0 +1,2306 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Crime Complaint Submission Wizard{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Multi-step guided crime intake: incident categorization, map geolocation, suspect description, and supporting evidence.">
+{% endblock %}
+{% block extra_head %}
+<!-- Leaflet CSS for Crime Scene Mapping (Graceful fallback if CDN unavailable) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+/* Complaint Wizard Styles — Inheriting ThirdEye Design Tokens */
+.wizard-container {
+    max-width: 1040px;
+    margin: 1.5rem auto 3rem auto;
+    padding: 0 1rem;
+}
+
+/* Wizard Header Card */
+.wizard-header-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: var(--glass-shadow-sm);
+}
+
+.wizard-title-group h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin: 0 0 4px 0;
+}
+
+.wizard-title-group p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.case-ref-badge {
+    background: rgba(0, 206, 201, 0.12);
+    border: 1px solid var(--accent-secondary);
+    color: var(--accent-secondary);
+    padding: 6px 14px;
+    border-radius: var(--border-radius-pill);
+    font-weight: 600;
+    font-size: 0.88rem;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Multi-Step Stepper Navigation */
+.stepper-nav {
+    display: flex;
+    justify-content: space-between;
+    background: var(--bg-surface-strong);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-lg);
+    padding: 0.75rem 1rem;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+    gap: 0.5rem;
+}
+
+.step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.22s ease;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.step-item:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.step-item.active {
+    background: var(--gradient-subtle);
+    border-color: var(--border-glass);
+    color: var(--text-bright);
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0, 206, 201, 0.15);
+}
+
+.step-item.completed {
+    color: var(--accent-secondary);
+}
+
+.step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+
+.step-item.active .step-num {
+    background: var(--gradient-primary);
+    color: #fff;
+    box-shadow: var(--shadow-glow-cyan);
+}
+
+.step-item.completed .step-num {
+    background: var(--accent-secondary);
+    color: var(--bg-deep);
+}
+
+/* Wizard Form Step Panels */
+.wizard-step-panel {
+    display: none;
+}
+
+.wizard-step-panel.active {
+    display: block;
+    animation: fadeInPanel 0.28s ease forwards;
+}
+
+@keyframes fadeInPanel {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    box-shadow: var(--glass-shadow);
+    margin-bottom: 1.5rem;
+}
+
+.panel-section-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 0.35rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-section-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+/* Form Groups & Required Stars */
+.field-label {
+    font-weight: 500;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.field-required {
+    color: #ff7675;
+    margin-left: 2px;
+}
+
+.field-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Microphone & Speech Controls */
+.speech-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--bg-surface-strong);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-md);
+    margin-bottom: 8px;
+}
+
+.speech-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border-glass);
+    background: rgba(9, 132, 227, 0.15);
+    color: var(--text-bright);
+}
+
+.speech-btn:hover {
+    background: rgba(9, 132, 227, 0.3);
+    border-color: var(--accent-secondary);
+}
+
+.speech-btn.recording {
+    background: rgba(214, 48, 49, 0.25);
+    border-color: #d63031;
+    color: #ff7675;
+    animation: pulseMic 1.2s infinite;
+}
+
+@keyframes pulseMic {
+    0% { box-shadow: 0 0 0 0 rgba(214, 48, 49, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(214, 48, 49, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(214, 48, 49, 0); }
+}
+
+.speech-status-indicator {
+    font-size: 0.8rem;
+    color: var(--accent-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Map Container */
+#incidentMap {
+    height: 300px;
+    width: 100%;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--border-glass);
+    margin-bottom: 10px;
+    background: #111;
+}
+
+.map-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Location Search & Autocomplete Suggestions */
+.location-search-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.location-suggestions-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1060;
+    max-height: 270px;
+    overflow-y: auto;
+    background: var(--bg-surface-strong, #0f172a);
+    border: 1px solid var(--accent-secondary, #00cec9);
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    margin-top: 4px;
+}
+
+html[data-resolved-theme="light"] .location-suggestions-dropdown,
+html[data-theme="light"] .location-suggestions-dropdown {
+    background: #ffffff !important;
+    border: 1px solid rgba(22, 119, 255, 0.35) !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14) !important;
+}
+
+.location-suggestion-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-glass-subtle, rgba(255, 255, 255, 0.08));
+    transition: background 0.15s ease;
+}
+
+html[data-resolved-theme="light"] .location-suggestion-item,
+html[data-theme="light"] .location-suggestion-item {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07) !important;
+}
+
+.location-suggestion-item:hover,
+.location-suggestion-item.active {
+    background: rgba(0, 206, 201, 0.18);
+}
+
+html[data-resolved-theme="light"] .location-suggestion-item:hover,
+html[data-resolved-theme="light"] .location-suggestion-item.active,
+html[data-theme="light"] .location-suggestion-item:hover,
+html[data-theme="light"] .location-suggestion-item.active {
+    background: #F0F7FF !important;
+}
+
+.location-suggestion-item:last-child {
+    border-bottom: none !important;
+}
+
+/* Suggestion Item Inner Elements */
+.suggestion-title {
+    font-weight: 700;
+    font-size: 0.96rem;
+    color: var(--text-bright, #FFFFFF);
+}
+
+html[data-resolved-theme="light"] .suggestion-title,
+html[data-theme="light"] .suggestion-title {
+    color: #111827 !important; /* Deep dark slate in light mode */
+}
+
+.suggestion-desc {
+    font-size: 0.84rem;
+    color: var(--text-secondary, #CBD5E1);
+    margin-top: 2px;
+}
+
+html[data-resolved-theme="light"] .suggestion-desc,
+html[data-theme="light"] .suggestion-desc {
+    color: #4B5563 !important; /* Crisp readable gray in light mode */
+}
+
+.suggestion-badge {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0, 206, 201, 0.15);
+    border: 1px solid rgba(0, 206, 201, 0.4);
+    color: #00cec9;
+    font-weight: 600;
+}
+
+html[data-resolved-theme="light"] .suggestion-badge,
+html[data-theme="light"] .suggestion-badge {
+    background: #E6F4FF !important;
+    border: 1px solid #91CAFF !important;
+    color: #0958D9 !important;
+}
+
+.location-icon {
+    color: #00cec9;
+}
+
+html[data-resolved-theme="light"] .location-icon,
+html[data-theme="light"] .location-icon {
+    color: #1677FF !important;
+}
+
+/* Selected Location Box */
+.selected-location-box {
+    background: var(--bg-surface, rgba(15, 23, 42, 0.85));
+    border: 1px solid var(--border-glass, rgba(0, 206, 201, 0.3));
+    border-radius: var(--border-radius-md);
+    transition: all 0.25s ease;
+}
+
+html[data-resolved-theme="light"] .selected-location-box,
+html[data-theme="light"] .selected-location-box {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(22, 119, 255, 0.28) !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06) !important;
+}
+
+.selected-location-box.updated-highlight {
+    border-color: var(--accent-secondary, #00cec9) !important;
+    box-shadow: 0 0 16px rgba(0, 206, 201, 0.35) !important;
+}
+
+html[data-resolved-theme="light"] .selected-location-box.updated-highlight,
+html[data-theme="light"] .selected-location-box.updated-highlight {
+    border-color: #1677FF !important;
+    box-shadow: 0 0 16px rgba(22, 119, 255, 0.25) !important;
+}
+
+.selected-location-title-label {
+    font-weight: 700;
+    color: var(--accent-secondary, #00cec9);
+}
+
+html[data-resolved-theme="light"] .selected-location-title-label,
+html[data-theme="light"] .selected-location-title-label {
+    color: #08979C !important;
+}
+
+.selected-location-address-text {
+    font-weight: 700;
+    font-size: 1.05rem;
+    line-height: 1.45;
+    color: var(--text-bright, #FFFFFF);
+}
+
+html[data-resolved-theme="light"] .selected-location-address-text,
+html[data-theme="light"] .selected-location-address-text {
+    color: #111827 !important; /* Bold high-contrast dark slate in light mode */
+}
+
+.selected-location-meta {
+    font-size: 0.84rem;
+    color: var(--text-secondary, #CBD5E1);
+}
+
+html[data-resolved-theme="light"] .selected-location-meta,
+html[data-theme="light"] .selected-location-meta {
+    color: #4B5563 !important; /* Crisp readable gray in light mode */
+}
+
+.selected-location-coords-value {
+    color: var(--text-bright, #FFFFFF);
+    font-weight: 700;
+}
+
+html[data-resolved-theme="light"] .selected-location-coords-value,
+html[data-theme="light"] .selected-location-coords-value {
+    color: #1F2937 !important; /* Clear dark text in light mode */
+}
+
+/* Location Source Badges */
+.location-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+.location-badge-search {
+    background: rgba(0, 206, 201, 0.2);
+    border: 1px solid rgba(0, 206, 201, 0.5);
+    color: #00cec9;
+}
+
+html[data-resolved-theme="light"] .location-badge-search,
+html[data-theme="light"] .location-badge-search {
+    background: #E6F4FF !important;
+    border: 1px solid #91CAFF !important;
+    color: #0958D9 !important;
+}
+
+.location-badge-gps {
+    background: rgba(46, 204, 113, 0.2);
+    border: 1px solid rgba(46, 204, 113, 0.5);
+    color: #2ecc71;
+}
+
+html[data-resolved-theme="light"] .location-badge-gps,
+html[data-theme="light"] .location-badge-gps {
+    background: #F6FFED !important;
+    border: 1px solid #B7EB8F !important;
+    color: #389E0D !important;
+}
+
+.location-badge-pin {
+    background: rgba(52, 152, 219, 0.2);
+    border: 1px solid rgba(52, 152, 219, 0.5);
+    color: #3498db;
+}
+
+html[data-resolved-theme="light"] .location-badge-pin,
+html[data-theme="light"] .location-badge-pin {
+    background: #FFF7E6 !important;
+    border: 1px solid #FFD591 !important;
+    color: #D46B08 !important;
+}
+
+.location-badge-manual {
+    background: rgba(149, 165, 166, 0.2);
+    border: 1px solid rgba(149, 165, 166, 0.5);
+    color: #bdc3c7;
+}
+
+html[data-resolved-theme="light"] .location-badge-manual,
+html[data-theme="light"] .location-badge-manual {
+    background: #F5F5F5 !important;
+    border: 1px solid #D9D9D9 !important;
+    color: #595959 !important;
+}
+
+/* Light mode button contrast enhancements */
+html[data-resolved-theme="light"] #btnLocationSearch,
+html[data-theme="light"] #btnLocationSearch {
+    color: #0958D9 !important;
+    border-color: #1677FF !important;
+    background: #E6F4FF !important;
+}
+
+html[data-resolved-theme="light"] #btnLocationSearch:hover,
+html[data-theme="light"] #btnLocationSearch:hover {
+    color: #ffffff !important;
+    border-color: #1677FF !important;
+    background: #1677FF !important;
+}
+
+html[data-resolved-theme="light"] #btnUseCurrentLocation,
+html[data-theme="light"] #btnUseCurrentLocation {
+    color: #08979C !important;
+    border-color: #08979C !important;
+    background: rgba(8, 151, 156, 0.08) !important;
+}
+
+html[data-resolved-theme="light"] #btnUseCurrentLocation:hover,
+html[data-theme="light"] #btnUseCurrentLocation:hover {
+    color: #ffffff !important;
+    border-color: #08979C !important;
+    background: #08979C !important;
+}
+
+/* Reference Cards Selection */
+.ref-option-card {
+    background: var(--bg-surface-strong);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    position: relative;
+}
+
+.ref-option-card:hover {
+    border-color: var(--border-glass);
+    background: rgba(30, 39, 46, 0.9);
+}
+
+.ref-option-card.selected {
+    border-color: var(--accent-secondary);
+    background: var(--gradient-subtle);
+    box-shadow: 0 4px 18px rgba(0, 206, 201, 0.15);
+}
+
+.ref-radio-input {
+    margin-right: 10px;
+}
+
+/* Evidence Upload Dropzone */
+.dropzone-box {
+    border: 2px dashed var(--border-glass);
+    border-radius: var(--border-radius-md);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    background: rgba(15, 20, 25, 0.6);
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.dropzone-box:hover, .dropzone-box.dragover {
+    border-color: var(--accent-secondary);
+    background: rgba(0, 206, 201, 0.05);
+}
+
+.dropzone-icon {
+    font-size: 2.5rem;
+    color: var(--accent-secondary);
+    margin-bottom: 8px;
+}
+
+/* Evidence Files Table */
+.evidence-item-card {
+    background: var(--bg-surface-strong);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-sm);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    gap: 12px;
+}
+
+.evidence-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+.evidence-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-bright);
+}
+
+.evidence-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Wizard Action Footer */
+.wizard-actions-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-glass-subtle);
+}
+
+/* Review Summary Card Elements */
+.review-section {
+    background: var(--bg-surface-strong);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.review-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.review-section-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent-secondary);
+}
+
+.btn-edit-step {
+    background: transparent;
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    padding: 3px 10px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-edit-step:hover {
+    color: var(--text-bright);
+    border-color: var(--accent-secondary);
+}
+
+.review-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem 1.25rem;
+}
+
+.review-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.review-val {
+    font-size: 0.92rem;
+    color: var(--text-primary);
+    font-weight: 500;
+    word-break: break-word;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <!-- Header with Reference Number and Status -->
+    <div class="wizard-header-card">
+        <div class="wizard-title-group">
+            <h2>Crime Complaint Submission</h2>
+            <p>Guided citizen crime intake and forensic evidence registration.</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="case-ref-badge" id="caseRefBadge">
+                <i class="fa-solid fa-file-lines me-1 text-info"></i>
+                <span>{{ complaint.complaint_number }}</span>
+            </span>
+            <span class="badge bg-secondary text-uppercase" style="font-size: 0.78rem;">
+                {{ complaint.status }}
+            </span>
+        </div>
+    </div>
+
+    <!-- 5-Step Stepper Navigation -->
+    <div class="stepper-nav" id="stepperNav">
+        <div class="step-item {% if (active_step or 1) == 1 %}active{% elif (active_step or 1) > 1 %}completed{% endif %}" data-step="1" onclick="goToStep(1)">
+            <span class="step-num">1</span>
+            <span>Incident Details</span>
+        </div>
+        <div class="step-item {% if active_step == 2 %}active{% elif (active_step or 1) > 2 %}completed{% endif %}" data-step="2" onclick="goToStep(2)">
+            <span class="step-num">2</span>
+            <span>Location & Narrative</span>
+        </div>
+        <div class="step-item {% if active_step == 3 %}active{% elif (active_step or 1) > 3 %}completed{% endif %}" data-step="3" onclick="goToStep(3)">
+            <span class="step-num">3</span>
+            <span>Suspect Description</span>
+        </div>
+        <div class="step-item {% if active_step == 4 %}active{% elif (active_step or 1) > 4 %}completed{% endif %}" data-step="4" onclick="goToStep(4)">
+            <span class="step-num">4</span>
+            <span>Evidence & Reference</span>
+        </div>
+        <div class="step-item {% if active_step == 5 %}active{% endif %}" data-step="5" onclick="goToStep(5)">
+            <span class="step-num">5</span>
+            <span>Final Review</span>
+        </div>
+    </div>
+
+    <!-- Main Complaint Form -->
+    <form id="complaintForm" method="POST" action="{{ url_for('submit_complaint_route', complaint_id=complaint.id) }}" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        
+        <!-- ================================================================= -->
+        <!-- STEP 1: COMPLAINT DETAILS -->
+        <!-- ================================================================= -->
+        <div class="wizard-step-panel {% if (active_step or 1) == 1 %}active{% endif %}" id="step1Panel">
+            <div class="panel-card">
+                <div class="panel-section-title">
+                    <i class="fa-solid fa-pen-to-square me-2 text-info"></i>
+                    <span>Step 1: Incident Categorization & Complainant Details</span>
+                </div>
+                <div class="panel-section-desc">
+                    Enter the primary title and category of the crime incident.
+                </div>
+
+                <div class="mb-3">
+                    <label for="title" class="field-label">
+                        Complaint Title <span class="field-required">*</span>
+                    </label>
+                    <input type="text" class="form-control glass-input" id="title" name="title"
+                           value="{{ complaint.title or '' }}" placeholder="e.g. Armed burglary at apartment block 4" required maxlength="200">
+                    <div class="field-hint">A clear, descriptive summary line for investigative reference.</div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="category" class="field-label">
+                            Incident Category <span class="field-required">*</span>
+                        </label>
+                        <select class="form-select glass-input" id="category" name="category" required>
+                            <option value="" {% if not complaint.category %}selected{% endif %}>-- Select Category --</option>
+                            <option value="Theft / Burglary" {% if complaint.category == 'Theft / Burglary' %}selected{% endif %}>Theft / Burglary</option>
+                            <option value="Robbery / Extortion" {% if complaint.category == 'Robbery / Extortion' %}selected{% endif %}>Robbery / Extortion</option>
+                            <option value="Physical Assault" {% if complaint.category == 'Physical Assault' %}selected{% endif %}>Physical Assault</option>
+                            <option value="Cybercrime / Fraud" {% if complaint.category == 'Cybercrime / Fraud' %}selected{% endif %}>Cybercrime / Fraud</option>
+                            <option value="Harassment / Stalking" {% if complaint.category == 'Harassment / Stalking' %}selected{% endif %}>Harassment / Stalking</option>
+                            <option value="Vandalism / Property Damage" {% if complaint.category == 'Vandalism / Property Damage' %}selected{% endif %}>Vandalism / Property Damage</option>
+                            <option value="Missing Person" {% if complaint.category == 'Missing Person' %}selected{% endif %}>Missing Person</option>
+                            <option value="Suspicious Activity" {% if complaint.category == 'Suspicious Activity' %}selected{% endif %}>Suspicious Activity</option>
+                            <option value="Other" {% if complaint.category == 'Other' %}selected{% endif %}>Other Incident</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="reporter_relationship" class="field-label">
+                            Reporter Relationship
+                        </label>
+                        <select class="form-select glass-input" id="reporter_relationship" name="reporter_relationship">
+                            <option value="victim" {% if complaint.reporter_relationship == 'victim' or not complaint.reporter_relationship %}selected{% endif %}>Victim</option>
+                            <option value="witness" {% if complaint.reporter_relationship == 'witness' %}selected{% endif %}>Witness</option>
+                            <option value="representative" {% if complaint.reporter_relationship == 'representative' %}selected{% endif %}>Representative / Family Member</option>
+                            <option value="other" {% if complaint.reporter_relationship == 'other' %}selected{% endif %}>Other Informant</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="complainant_context" class="field-label">
+                        Additional Complainant Context (Optional)
+                    </label>
+                    <textarea class="form-control glass-input" id="complainant_context" name="complainant_context" rows="3"
+                              placeholder="Any context regarding vulnerability, reporting capacity, or representation...">{{ complaint.complainant_context or '' }}</textarea>
+                    <div class="field-hint">Your authenticated user details (username and name) are automatically linked.</div>
+                </div>
+
+                <div class="wizard-actions-bar">
+                    <div></div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn-neon-secondary" onclick="saveDraftCurrentStep(1)">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Save Draft
+                        </button>
+                        <button type="button" class="btn-neon-primary" onclick="goToStep(2)">
+                            Next: Location & Narrative &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- STEP 2: TIME, LOCATION AND NARRATIVE -->
+        <!-- ================================================================= -->
+        <div class="wizard-step-panel {% if active_step == 2 %}active{% endif %}" id="step2Panel">
+            <div class="panel-card">
+                <div class="panel-section-title">
+                    <i class="fa-solid fa-location-dot me-2 text-info"></i>
+                    <span>Step 2: Incident Time, Crime-Scene Location & Narrative</span>
+                </div>
+                <div class="panel-section-desc">
+                    Specify incident timing, crime-scene location, and detailed narrative via text or microphone transcription.
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-5">
+                        <label for="incident_at" class="field-label">Incident Date & Time</label>
+                        <input type="datetime-local" class="form-control glass-input" id="incident_at" name="incident_at"
+                               value="{% if complaint.incident_at %}{{ complaint.incident_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}">
+                    </div>
+                    <div class="col-md-7">
+                        <label for="location_search_input" class="field-label d-flex justify-content-between align-items-center">
+                            <span><i class="fa-solid fa-magnifying-glass me-1 text-info"></i> Location Search</span>
+                            <span class="field-hint">City, town, area, street, landmark, or institution</span>
+                        </label>
+                        <div class="location-search-wrapper">
+                            <div class="input-group">
+                                <input type="text" class="form-control glass-input" id="location_search_input"
+                                       placeholder="Enter city, area, street or landmark... (e.g. Jammu, Solapur, Vijayapura)"
+                                       autocomplete="off" onkeydown="handleSearchKeydown(event)">
+                                <button class="btn btn-outline-info px-4 fw-semibold" type="button" id="btnLocationSearch" onclick="searchLocationManual()">
+                                    <i class="fa-solid fa-magnifying-glass me-1"></i> Search
+                                </button>
+                            </div>
+                            <div id="location_suggestions_box" class="location-suggestions-dropdown d-none"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="location_search_status" class="alert alert-warning py-2 px-3 small mb-3 d-none" role="alert"></div>
+
+                <!-- Interactive Leaflet Map & Location Selection -->
+                <div class="mb-3">
+                    <div class="map-toolbar">
+                        <label class="field-label mb-0"><i class="fa-solid fa-map-location-dot me-1 text-info"></i> Interactive Map Pinpoint</label>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-info" id="btnUseCurrentLocation" onclick="locateDevicePosition()">
+                                <i class="fa-solid fa-crosshairs me-1 text-info"></i> Use Current Location
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetMapMarker()">
+                                <i class="fa-solid fa-rotate-left me-1"></i> Clear Pin
+                            </button>
+                        </div>
+                    </div>
+                    <div id="incidentMap"></div>
+
+                    <!-- Selected Location Display Card -->
+                    <div class="selected-location-box p-3 mb-3" id="selected_location_box">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="selected-location-title-label small">
+                                <i class="fa-solid fa-location-dot me-1"></i> Selected Location:
+                            </span>
+                            <span class="badge location-badge {% if complaint.location_source == 'device' %}location-badge-gps{% elif complaint.location_source == 'search' %}location-badge-search{% elif complaint.location_source == 'map_pin' %}location-badge-pin{% else %}location-badge-manual{% endif %} small" id="location_badge_source">
+                                {% if complaint.location_source == 'device' %}GPS Device
+                                {% elif complaint.location_source == 'search' %}Location Search
+                                {% elif complaint.location_source == 'map_pin' %}Map Pin
+                                {% else %}Manual / Unset{% endif %}
+                            </span>
+                        </div>
+                        <div class="selected-location-address-text" id="selected_location_display">
+                            {% if complaint.location_address %}{{ complaint.location_address }}{% else %}No location selected yet. Search above, click on the map, or click 'Use Current Location'.{% endif %}
+                        </div>
+                        <div class="selected-location-meta mt-2 d-flex flex-wrap gap-3 align-items-center" id="selected_coords_container">
+                            <span><i class="fa-solid fa-compass me-1"></i> Coordinates: <strong class="selected-location-coords-value" id="display_coords">{% if complaint.latitude and complaint.longitude %}{{ complaint.latitude }}, {{ complaint.longitude }}{% else %}Not set{% endif %}</strong></span>
+                            <span class="opacity-50">|</span>
+                            <span class="opacity-75">Click anywhere on the map or drag the pin to refine.</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label for="location_address" class="field-label small text-muted mb-1">Crime-Scene Address / Landmark</label>
+                            <input type="text" class="form-control glass-input form-control-sm" id="location_address" name="location_address"
+                                   value="{{ complaint.location_address or '' }}" placeholder="Address will auto-update or enter manually" oninput="onManualAddressInput()">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="location_notes" class="field-label small text-muted mb-1">Scene Notes (e.g. 3rd floor)</label>
+                            <input type="text" class="form-control glass-input form-control-sm" id="location_notes" name="location_notes"
+                                   placeholder="e.g. Opposite Gate 2" value="{{ complaint.location_notes or '' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="field-label small text-muted mb-1">Latitude & Longitude</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" step="any" class="form-control glass-input" id="latitude" name="latitude"
+                                       placeholder="Latitude" value="{{ complaint.latitude or '' }}" onchange="updateMarkerFromInputs()">
+                                <input type="number" step="any" class="form-control glass-input" id="longitude" name="longitude"
+                                       placeholder="Longitude" value="{{ complaint.longitude or '' }}" onchange="updateMarkerFromInputs()">
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="location_source" name="location_source" value="{{ complaint.location_source or 'manual' }}">
+                    <div class="field-hint mt-1">Map tiles require internet connectivity. You may enter the address and coordinates manually without GPS.</div>
+                </div>
+
+                <!-- Written Narrative & Voice Transcription -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label for="narrative" class="field-label mb-0">
+                            Incident Narrative <span class="field-required">*</span>
+                        </label>
+                        <span class="field-hint">Editable transcription and manual typing</span>
+                    </div>
+
+                    <!-- Speech Toolbar -->
+                    <div class="speech-toolbar">
+                        <button type="button" class="speech-btn" id="micToggleBtn" onclick="toggleSpeechRecognition()">
+                            <i class="fa-solid fa-microphone me-1" id="micIcon"></i>
+                            <span id="micText">Start Dictation</span>
+                        </button>
+                        <select class="form-select glass-input form-select-sm d-inline-block w-auto" id="speechLangSelect">
+                            <option value="en-IN" selected>English (India) [en-IN]</option>
+                            <option value="en-US">English (US) [en-US]</option>
+                            <option value="hi-IN">Hindi [hi-IN]</option>
+                        </select>
+                        <span class="speech-status-indicator" id="speechStatusText" style="display: none;">
+                            <span class="spinner-grow spinner-grow-sm text-info" role="status"></span>
+                            <span>Listening... Speak into microphone</span>
+                        </span>
+                    </div>
+
+                    <!-- Speech Privacy Notice -->
+                    <div class="field-hint mb-2" style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: flex-start; gap: 6px;">
+                        <i class="fa-solid fa-shield-halved mt-1" style="font-size: 0.9rem; color: var(--accent-secondary);"></i>
+                        <span><strong>Speech Privacy Notice:</strong> Browser speech recognition may process audio through your browser or an external speech service and may require internet access, depending on your browser. ThirdEye does not retain original speech audio or transmit it to external speech APIs. Manual typing is always supported.</span>
+                    </div>
+
+                    <!-- Speech Error / Browser Notice -->
+                    <div class="alert alert-warning py-2 px-3 small d-none" id="speechErrorAlert"></div>
+
+                    <textarea class="form-control glass-input" id="narrative" name="narrative" rows="6" required
+                              placeholder="Detail the sequence of events, what transpired, actions observed, suspect behavior, etc...">{{ complaint.narrative or '' }}</textarea>
+                    <input type="hidden" id="transcription_raw" name="transcription_raw" value="{{ complaint.transcription_raw or '' }}">
+                </div>
+
+                <!-- Optional Audio Note Recording -->
+                <div class="mb-3 p-3" style="background: rgba(15, 20, 25, 0.45); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md);">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold text-light small"><i class="fa-solid fa-microphone me-2 text-info"></i>Optional Supporting Audio Note</span>
+                        <span class="small text-muted">Separate explicit recording</span>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-info" id="recordAudioBtn" onclick="toggleAudioRecorder()">
+                            <i class="fa-solid fa-circle me-1 text-danger"></i> <span id="recordAudioText">Record Audio Note</span>
+                        </button>
+                        <div id="audioPlaybackBox" class="d-none d-flex align-items-center gap-2">
+                            <audio id="audioPlayback" controls style="height: 32px;"></audio>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="uploadRecordedAudio()">
+                                Attach to Evidence
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="discardRecordedAudio()">
+                                Discard
+                            </button>
+                        </div>
+                    </div>
+                    <div class="field-hint">Audio notes are attached as private evidence only upon your explicit confirmation.</div>
+                </div>
+
+                <div class="wizard-actions-bar">
+                    <button type="button" class="btn-neon-secondary" onclick="goToStep(1)">
+                        &larr; Back: Incident Details
+                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn-neon-secondary" onclick="saveDraftCurrentStep(2)">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Save Draft
+                        </button>
+                        <button type="button" class="btn-neon-primary" onclick="goToStep(3)">
+                            Next: Suspect Description &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- STEP 3: SUSPECT DESCRIPTION -->
+        <!-- ================================================================= -->
+        <div class="wizard-step-panel {% if active_step == 3 %}active{% endif %}" id="step3Panel">
+            <div class="panel-card">
+                <div class="panel-section-title">
+                    <i class="fa-solid fa-user-secret me-2 text-info"></i>
+                    <span>Step 3: Suspect Characteristics & Physical Profile</span>
+                </div>
+                <div class="panel-section-desc">
+                    Enter any observed characteristics. All fields are optional — select unknown or leave blank if unobserved.
+                </div>
+
+                <div class="alert alert-info py-2 px-3 small mb-4" style="background: rgba(9, 132, 227, 0.12); border-color: rgba(9, 132, 227, 0.3);">
+                    &#9432; <strong>Observation Notice:</strong> Descriptors assist identification and do not imply proven guilt. Uncertain characteristics may be safely left blank.
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label for="suspect_approx_age" class="field-label">Approximate Age</label>
+                        <input type="text" class="form-control glass-input" id="suspect_approx_age" name="suspect_approx_age"
+                               value="{{ complaint.suspect_approx_age or '' }}" placeholder="e.g. 25-30 or Unknown">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="suspect_gender" class="field-label">Perceived Gender Presentation</label>
+                        <select class="form-select glass-input" id="suspect_gender" name="suspect_gender">
+                            <option value="" {% if not complaint.suspect_gender %}selected{% endif %}>-- Unknown / Unreported --</option>
+                            <option value="Male" {% if complaint.suspect_gender == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if complaint.suspect_gender == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Non-binary / Other" {% if complaint.suspect_gender == 'Non-binary / Other' %}selected{% endif %}>Non-binary / Other</option>
+                            <option value="Unknown" {% if complaint.suspect_gender == 'Unknown' %}selected{% endif %}>Unknown</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="suspect_height" class="field-label">Height</label>
+                        <input type="text" class="form-control glass-input" id="suspect_height" name="suspect_height"
+                               value="{{ complaint.suspect_height or '' }}" placeholder="e.g. Approx 5'8&quot; or Medium">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label for="suspect_build" class="field-label">Build / Physique</label>
+                        <input type="text" class="form-control glass-input" id="suspect_build" name="suspect_build"
+                               value="{{ complaint.suspect_build or '' }}" placeholder="e.g. Slim, Athletic, Heavy, Unknown">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="suspect_complexion" class="field-label">Complexion / Skin Tone</label>
+                        <input type="text" class="form-control glass-input" id="suspect_complexion" name="suspect_complexion"
+                               value="{{ complaint.suspect_complexion or '' }}" placeholder="e.g. Fair, Wheatish, Dark, Unknown">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="suspect_hair" class="field-label">Hair Characteristics</label>
+                        <input type="text" class="form-control glass-input" id="suspect_hair" name="suspect_hair"
+                               value="{{ complaint.suspect_hair or '' }}" placeholder="e.g. Short black, Curly, Bald, Unknown">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label for="suspect_eyes" class="field-label">Eyes / Eyewear</label>
+                        <input type="text" class="form-control glass-input" id="suspect_eyes" name="suspect_eyes"
+                               value="{{ complaint.suspect_eyes or '' }}" placeholder="e.g. Dark brown, Wireframe glasses">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="suspect_clothing" class="field-label">Clothing Description</label>
+                        <input type="text" class="form-control glass-input" id="suspect_clothing" name="suspect_clothing"
+                               value="{{ complaint.suspect_clothing or '' }}" placeholder="e.g. Blue hoodie, grey trackpants">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="suspect_accessories" class="field-label">Accessories / Bags</label>
+                        <input type="text" class="form-control glass-input" id="suspect_accessories" name="suspect_accessories"
+                               value="{{ complaint.suspect_accessories or '' }}" placeholder="e.g. Black backpack, baseball cap">
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label for="suspect_mask_description" class="field-label">Mask / Face Covering Description</label>
+                        <input type="text" class="form-control glass-input" id="suspect_mask_description" name="suspect_mask_description"
+                               value="{{ complaint.suspect_mask_description or '' }}" placeholder="e.g. Black N95 mask, Bandana, None">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="suspect_identifying_marks" class="field-label">Identifying Marks / Tattoos / Scars</label>
+                        <input type="text" class="form-control glass-input" id="suspect_identifying_marks" name="suspect_identifying_marks"
+                               value="{{ complaint.suspect_identifying_marks or '' }}" placeholder="e.g. Scar on left chin, forearm tattoo">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="suspect_additional_details" class="field-label">Additional Suspect Observations</label>
+                    <textarea class="form-control glass-input" id="suspect_additional_details" name="suspect_additional_details" rows="2"
+                              placeholder="Any gait, accent, language spoken, or other distinct behavioral observations...">{{ complaint.suspect_additional_details or '' }}</textarea>
+                </div>
+
+                <div class="wizard-actions-bar">
+                    <button type="button" class="btn-neon-secondary" onclick="goToStep(2)">
+                        &larr; Back: Location & Narrative
+                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn-neon-secondary" onclick="saveDraftCurrentStep(3)">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Save Draft
+                        </button>
+                        <button type="button" class="btn-neon-primary" onclick="goToStep(4)">
+                            Next: Evidence & Reference &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- STEP 4: EVIDENCE AND FACIAL REFERENCE -->
+        <!-- ================================================================= -->
+        <div class="wizard-step-panel {% if active_step == 4 %}active{% endif %}" id="step4Panel">
+            <div class="panel-card">
+                <div class="panel-section-title">
+                    <i class="fa-solid fa-images me-2 text-info"></i>
+                    <span>Step 4: Supporting Evidence & Facial Reference Workflow</span>
+                </div>
+                <div class="panel-section-desc">
+                    Attach relevant photographs, documents, or audio files, and specify the suspect facial reference configuration.
+                </div>
+
+                <!-- Facial Reference Options -->
+                <div class="mb-4">
+                    <label class="field-label mb-2">Facial Reference Workflow Option</label>
+
+                    <!-- Option A -->
+                    <div class="ref-option-card {% if complaint.facial_reference_type == 'none' %}selected{% endif %}"
+                         onclick="selectFacialRef('none', this)">
+                        <div class="d-flex align-items-start">
+                            <input type="radio" class="ref-radio-input mt-1" name="facial_reference_type" id="ref_none"
+                                   value="none" {% if complaint.facial_reference_type == 'none' %}checked{% endif %}>
+                            <div class="w-100">
+                                <strong class="text-bright">Option A: No Suspect Photograph Available</strong>
+                                <p class="text-secondary small mb-1 mt-1">
+                                    No photograph or image is available. The composite facial sketch constructor workflow will be available in later investigation stages.
+                                </p>
+                                {% if complaint.id %}
+                                <div class="mt-2 pt-2 border-top border-secondary border-opacity-25 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    {% if complaint.status in ('approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence', 'closed') %}
+                                    <span class="small text-info"><i class="fa-solid fa-pen-nib me-1"></i> Proceed to Step 2: Construct sketch using saved suspect profile:</span>
+                                    <a href="{{ url_for('case_sketch', complaint_id=complaint.id) }}" class="btn btn-sm btn-outline-info">
+                                        Open Face Construction &rarr;
+                                    </a>
+                                    {% else %}
+                                    <span class="small text-info"><i class="fa-solid fa-lock-open me-1"></i> Forensic Face Construction unlocks in the Case Workspace after submission and Administrator approval.</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Option B -->
+                    <div class="ref-option-card {% if complaint.facial_reference_type == 'photo_normal' %}selected{% endif %}"
+                         onclick="selectFacialRef('photo_normal', this)">
+                        <div class="d-flex align-items-start">
+                            <input type="radio" class="ref-radio-input mt-1" name="facial_reference_type" id="ref_normal"
+                                   value="photo_normal" {% if complaint.facial_reference_type == 'photo_normal' %}checked{% endif %}>
+                            <div>
+                                <strong class="text-bright">Option B: Ordinary Suspect Photograph</strong>
+                                <p class="text-secondary small mb-0 mt-1">
+                                    An ordinary, unmasked reference photograph is provided. The original image is preserved for forensic facial variations and poster creation.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Private Evidence Uploads -->
+                <div class="mb-4">
+                    <label class="field-label mb-2">Upload Supporting Evidence</label>
+                    
+                    <div class="dropzone-box mb-3" id="dropzoneBox" onclick="document.getElementById('evidenceFileInput').click()">
+                        <div class="dropzone-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                        <div class="fw-semibold text-bright mb-1">Click to browse or drag and drop evidence files here</div>
+                        <div class="small text-muted">
+                            Images (JPEG, PNG, WebP &le; 10 MB) &bull; Documents (PDF &le; 10 MB) &bull; Audio (WebM, Ogg, WAV &le; 15 MB)
+                        </div>
+                        <div class="small text-muted mt-1">Up to 5 files per upload &bull; Max 40 MB total per complaint</div>
+                    </div>
+                    <input type="file" id="evidenceFileInput" class="d-none" multiple
+                           accept=".jpg,.jpeg,.png,.webp,.pdf,.webm,.ogg,.wav,.mp3" onchange="handleEvidenceUpload(this.files)">
+
+                    <!-- Attached Files List -->
+                    <div id="attachedEvidenceList">
+                        {% for ev in evidence_list %}
+                            <div class="evidence-item-card" id="ev-card-{{ ev.id }}">
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="fs-4">
+                                        {% if ev.evidence_type == 'photo' %}<i class="fa-solid fa-image text-info"></i>
+                                        {% elif ev.evidence_type == 'audio' %}<i class="fa-solid fa-file-audio text-info"></i>
+                                        {% elif ev.evidence_type == 'document' %}<i class="fa-solid fa-file-lines text-info"></i>
+                                        {% else %}<i class="fa-solid fa-paperclip text-info"></i>{% endif %}
+                                    </span>
+                                    <div class="evidence-meta">
+                                        <span class="evidence-name">{{ ev.original_filename or 'Attachment' }}</span>
+                                        <span class="evidence-sub">
+                                            {{ ((ev.file_size_bytes or 0) / 1024)|round(1) }} KB &bull; {{ ev.evidence_type|capitalize }} &bull; SHA: {{ ev.sha256_hex[:8] if ev.sha256_hex else 'N/A' }}...
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <a href="{{ url_for('view_complaint_evidence', complaint_id=complaint.id, evidence_id=ev.id) }}"
+                                       target="_blank" class="btn btn-sm btn-outline-info">View</a>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteEvidenceFile({{ ev.id }})">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="text-muted small text-center py-3" id="noEvidenceNotice">
+                                No evidence files attached yet. Attach photos, documents or audio above.
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="wizard-actions-bar">
+                    <button type="button" class="btn-neon-secondary" onclick="goToStep(3)">
+                        &larr; Back: Suspect Description
+                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn-neon-secondary" onclick="saveDraftCurrentStep(4)">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Save Draft
+                        </button>
+                        <button type="button" class="btn-neon-primary" onclick="goToStep(5)">
+                            Next: Final Review &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- STEP 5: FINAL REVIEW -->
+        <!-- ================================================================= -->
+        <div class="wizard-step-panel {% if active_step == 5 %}active{% endif %}" id="step5Panel">
+            <div class="panel-card">
+                <div class="panel-section-title">
+                    <i class="fa-solid fa-clipboard-check me-2 text-info"></i>
+                    <span>Step 5: Review Complete Complaint & Submit</span>
+                </div>
+                <div class="panel-section-desc">
+                    Review all recorded details before final submission. You may edit any section before confirming.
+                </div>
+
+                <!-- Section 1 Review -->
+                <div class="review-section">
+                    <div class="review-section-header">
+                        <h4>1. Incident Details</h4>
+                        <button type="button" class="btn-edit-step" onclick="goToStep(1)">Edit</button>
+                    </div>
+                    <div class="review-grid">
+                        <div>
+                            <div class="review-label">Title</div>
+                            <div class="review-val" id="rev_title">{{ complaint.title or '(Not entered)' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Category</div>
+                            <div class="review-val" id="rev_category">{{ complaint.category or '(Not selected)' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Reporter Relationship</div>
+                            <div class="review-val" id="rev_relationship">{{ complaint.reporter_relationship or 'Victim' }}</div>
+                        </div>
+                    </div>
+                    <div class="mt-2" id="rev_context_box" style="{% if not complaint.complainant_context %}display:none;{% endif %}">
+                        <div class="review-label">Complainant Context</div>
+                        <div class="review-val" id="rev_context">{{ complaint.complainant_context or '' }}</div>
+                    </div>
+                </div>
+
+                <!-- Section 2 Review -->
+                <div class="review-section">
+                    <div class="review-section-header">
+                        <h4>2. Time, Location & Narrative</h4>
+                        <button type="button" class="btn-edit-step" onclick="goToStep(2)">Edit</button>
+                    </div>
+                    <div class="review-grid mb-2">
+                        <div>
+                            <div class="review-label">Incident Date & Time</div>
+                            <div class="review-val" id="rev_incident_at">
+                                {{ complaint.incident_at.strftime('%Y-%m-%d %H:%M') if complaint.incident_at else '(Unspecified)' }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="review-label">Crime-Scene Address</div>
+                            <div class="review-val" id="rev_address">{{ complaint.location_address or '(Unspecified)' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Coordinates</div>
+                            <div class="review-val" id="rev_coords">
+                                {% if complaint.latitude and complaint.longitude %}
+                                    {{ complaint.latitude }}, {{ complaint.longitude }} ({{ complaint.location_source }})
+                                {% else %}
+                                    (None)
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="review-label">Incident Narrative</div>
+                        <div class="review-val" style="white-space: pre-wrap;" id="rev_narrative">
+                            {{ complaint.narrative or '(No narrative provided)' }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3 Review -->
+                <div class="review-section">
+                    <div class="review-section-header">
+                        <h4>3. Suspect Characteristics</h4>
+                        <button type="button" class="btn-edit-step" onclick="goToStep(3)">Edit</button>
+                    </div>
+                    <div class="review-grid">
+                        <div>
+                            <div class="review-label">Age</div>
+                            <div class="review-val" id="rev_age">{{ complaint.suspect_approx_age or 'Unknown' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Gender</div>
+                            <div class="review-val" id="rev_gender">{{ complaint.suspect_gender or 'Unknown' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Height / Build</div>
+                            <div class="review-val" id="rev_height_build">
+                                {{ complaint.suspect_height or 'Unknown' }} / {{ complaint.suspect_build or 'Unknown' }}
+                            </div>
+                        </div>
+                        <div>
+                            <div class="review-label">Complexion</div>
+                            <div class="review-val" id="rev_complexion">{{ complaint.suspect_complexion or 'Unknown' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Hair</div>
+                            <div class="review-val" id="rev_hair">{{ complaint.suspect_hair or 'Unknown' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Eyes</div>
+                            <div class="review-val" id="rev_eyes">{{ complaint.suspect_eyes or 'Unknown' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Clothing</div>
+                            <div class="review-val" id="rev_clothing">{{ complaint.suspect_clothing or 'None reported' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Mask / Covering</div>
+                            <div class="review-val" id="rev_mask">{{ complaint.suspect_mask_description or 'None' }}</div>
+                        </div>
+                        <div>
+                            <div class="review-label">Identifying Marks</div>
+                            <div class="review-val" id="rev_marks">{{ complaint.suspect_identifying_marks or 'None reported' }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4 Review -->
+                <div class="review-section">
+                    <div class="review-section-header">
+                        <h4>4. Facial Reference & Attached Evidence</h4>
+                        <button type="button" class="btn-edit-step" onclick="goToStep(4)">Edit</button>
+                    </div>
+                    <div class="mb-2">
+                        <div class="review-label">Selected Facial Reference Option</div>
+                        <div class="review-val text-info fw-semibold" id="rev_facial_ref">
+                            {% if complaint.facial_reference_type == 'photo_normal' %}
+                                Option B: Ordinary Suspect Photograph
+                            {% else %}
+                                Option A: No Suspect Photograph (Composite Sketch Workflow)
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="review-label">Attached Evidence Files (<span id="rev_ev_count">{{ evidence_list|length }}</span>)</div>
+                        <ul class="list-unstyled mb-0 mt-1" id="rev_ev_list">
+                            {% for ev in evidence_list %}
+                                <li class="small text-secondary">&bull; {{ ev.original_filename }} ({{ ((ev.file_size_bytes or 0)/1024)|round(1) }} KB, {{ ev.evidence_type }})</li>
+                            {% else %}
+                                <li class="small text-muted">No evidence files attached.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Final Submission Notice & Action -->
+                <div class="alert alert-dark border-secondary small mb-4">
+                    <i class="fa-solid fa-triangle-exclamation me-1 text-warning"></i> <strong>Submission Confirmation:</strong> Submitting this complaint will change its status from <code>draft</code> to <code>submitted</code> and lock citizen editing. The case will be assigned a permanent reference number and registered in the investigation audit timeline.
+                </div>
+
+                <div class="wizard-actions-bar">
+                    <button type="button" class="btn-neon-secondary" onclick="goToStep(4)">
+                        &larr; Back: Evidence & Reference
+                    </button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn-neon-secondary" onclick="saveDraftCurrentStep(5)">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> Save Draft
+                        </button>
+                        <button type="submit" class="btn-neon-primary" id="finalSubmitBtn" style="padding: 10px 32px; font-size: 1rem;">
+                            <i class="fa-solid fa-check me-1"></i> Submit Crime Complaint
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Leaflet JS for Crime Scene Mapping -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const CSRF_TOKEN = "{{ csrf_token() }}";
+const COMPLAINT_ID = {{ complaint.id }};
+const DRAFT_URL = "{{ url_for('save_draft_step', complaint_id=complaint.id) }}";
+const EVIDENCE_UPLOAD_URL = "{{ url_for('upload_complaint_evidence', complaint_id=complaint.id) }}";
+let currentStep = {{ active_step or 1 }};
+let map = null;
+let marker = null;
+let speechRecognizer = null;
+let isListening = false;
+let mediaRecorder = null;
+let audioChunks = [];
+
+document.addEventListener("DOMContentLoaded", function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const stepParam = parseInt(urlParams.get('step'));
+    if (stepParam && stepParam >= 1 && stepParam <= 5) {
+        goToStep(stepParam);
+    } else {
+        goToStep({{ active_step or 1 }});
+    }
+
+    const complaintFormEl = document.getElementById('complaintForm');
+    if (complaintFormEl) {
+        complaintFormEl.addEventListener('submit', function(e) {
+            const titleEl = document.getElementById('title');
+            const titleVal = titleEl ? titleEl.value.trim() : '';
+            const catEl = document.getElementById('category');
+            const catVal = catEl ? catEl.value.trim() : '';
+            const narrEl = document.getElementById('narrative');
+            const narrVal = narrEl ? narrEl.value.trim() : '';
+
+            if (!titleVal) {
+                e.preventDefault();
+                goToStep(1);
+                if (titleEl) titleEl.focus();
+                showToast('Please provide a complaint title in Step 1.', 'warning');
+                return false;
+            }
+            if (!catVal) {
+                e.preventDefault();
+                goToStep(1);
+                if (catEl) catEl.focus();
+                showToast('Please select an incident category in Step 1.', 'warning');
+                return false;
+            }
+            if (!narrVal) {
+                e.preventDefault();
+                goToStep(2);
+                if (narrEl) narrEl.focus();
+                showToast('Please provide an incident narrative in Step 2.', 'warning');
+                return false;
+            }
+        });
+    }
+});
+
+// =========================================================================
+// STEP NAVIGATION & REVIEW POPULATION
+// =========================================================================
+function goToStep(step) {
+    if (step < 1 || step > 5) return;
+
+    // Hide all panels
+    for (let i = 1; i <= 5; i++) {
+        const p = document.getElementById(`step${i}Panel`);
+        if (p) p.classList.remove('active');
+        const s = document.querySelector(`.step-item[data-step="${i}"]`);
+        if (s) {
+            s.classList.remove('active');
+            if (i < step) {
+                s.classList.add('completed');
+            } else {
+                s.classList.remove('completed');
+            }
+        }
+    }
+
+    // Activate target
+    const targetPanel = document.getElementById(`step${step}Panel`);
+    if (targetPanel) targetPanel.classList.add('active');
+    const targetStep = document.querySelector(`.step-item[data-step="${step}"]`);
+    if (targetStep) targetStep.classList.add('active');
+
+    currentStep = step;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Initialize or refresh map layout on step 2 if needed
+    if (step === 2) {
+        setTimeout(function() {
+            initMapIfNeeded();
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 200);
+    }
+
+    // Populate review screen on step 5
+    if (step === 5) {
+        populateReviewData();
+    }
+}
+
+function populateReviewData() {
+    const titleVal = document.getElementById('title').value.trim();
+    const catVal = document.getElementById('category').value;
+    const relVal = document.getElementById('reporter_relationship').value;
+    const ctxVal = document.getElementById('complainant_context').value.trim();
+    const incVal = document.getElementById('incident_at').value;
+    const addrVal = document.getElementById('location_address').value.trim();
+    const latVal = document.getElementById('latitude').value.trim();
+    const lonVal = document.getElementById('longitude').value.trim();
+    const srcVal = document.getElementById('location_source').value;
+    const narrVal = document.getElementById('narrative').value.trim();
+
+    document.getElementById('rev_title').textContent = titleVal || '(Not entered)';
+    document.getElementById('rev_category').textContent = catVal || '(Not selected)';
+    document.getElementById('rev_relationship').textContent = relVal || 'Victim';
+    
+    if (ctxVal) {
+        document.getElementById('rev_context_box').style.display = 'block';
+        document.getElementById('rev_context').textContent = ctxVal;
+    } else {
+        document.getElementById('rev_context_box').style.display = 'none';
+    }
+
+    document.getElementById('rev_incident_at').textContent = incVal ? incVal.replace('T', ' ') : '(Unspecified)';
+    document.getElementById('rev_address').textContent = addrVal || '(Unspecified)';
+    document.getElementById('rev_coords').textContent = (latVal && lonVal) ? `${latVal}, ${lonVal} (${srcVal})` : '(None)';
+    document.getElementById('rev_narrative').textContent = narrVal || '(No narrative provided)';
+
+    // Suspect
+    document.getElementById('rev_age').textContent = document.getElementById('suspect_approx_age').value || 'Unknown';
+    document.getElementById('rev_gender').textContent = document.getElementById('suspect_gender').value || 'Unknown';
+    document.getElementById('rev_height_build').textContent = `${document.getElementById('suspect_height').value || 'Unknown'} / ${document.getElementById('suspect_build').value || 'Unknown'}`;
+    document.getElementById('rev_complexion').textContent = document.getElementById('suspect_complexion').value || 'Unknown';
+    document.getElementById('rev_hair').textContent = document.getElementById('suspect_hair').value || 'Unknown';
+    document.getElementById('rev_eyes').textContent = document.getElementById('suspect_eyes').value || 'Unknown';
+    document.getElementById('rev_clothing').textContent = document.getElementById('suspect_clothing').value || 'None reported';
+    document.getElementById('rev_mask').textContent = document.getElementById('suspect_mask_description').value || 'None';
+    document.getElementById('rev_marks').textContent = document.getElementById('suspect_identifying_marks').value || 'None reported';
+
+    // Facial ref
+    const selectedRef = document.querySelector('input[name="facial_reference_type"]:checked')?.value || 'none';
+    const refNames = {
+        'none': 'Option A: No Suspect Photograph (Composite Sketch Workflow)',
+        'photo_normal': 'Option B: Ordinary Suspect Photograph'
+    };
+    document.getElementById('rev_facial_ref').textContent = refNames[selectedRef] || refNames['none'];
+}
+
+// =========================================================================
+// ASYNC DRAFT SAVING
+// =========================================================================
+async function saveDraftCurrentStep(stepNum) {
+    const form = document.getElementById('complaintForm');
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch(DRAFT_URL, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        const data = await response.json();
+        if (response.ok && data.status === 'success') {
+            showToast('Draft progress saved successfully.', 'success');
+        } else {
+            showToast(data.message || 'Error saving draft.', 'warning');
+        }
+    } catch (e) {
+        showToast('Draft saved locally.', 'info');
+    }
+}
+
+// =========================================================================
+// LEAFLET INTERACTIVE MAP, LOCATION SEARCH & REVERSE GEOCODING
+// =========================================================================
+let searchDebounceTimer = null;
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function initMapIfNeeded() {
+    if (map || typeof L === 'undefined') return;
+
+    try {
+        const defaultLat = parseFloat(document.getElementById('latitude').value) || 20.5937;
+        const defaultLon = parseFloat(document.getElementById('longitude').value) || 78.9629;
+        const hasCoords = Boolean(document.getElementById('latitude').value && document.getElementById('longitude').value);
+        const defaultZoom = hasCoords ? 14 : 5;
+
+        map = L.map('incidentMap').setView([defaultLat, defaultLon], defaultZoom);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        if (hasCoords) {
+            marker = L.marker([defaultLat, defaultLon], { draggable: true }).addTo(map);
+            marker.on('dragend', onMarkerDragEnd);
+            const initialAddr = document.getElementById('location_address').value || 'Crime Scene Location';
+            marker.bindPopup(`<strong>${escapeHtml(initialAddr)}</strong><br><small class="text-muted">${defaultLat.toFixed(6)}, ${defaultLon.toFixed(6)}</small>`);
+        }
+
+        map.on('click', function(e) {
+            reverseGeocodeAndSetLocation(e.latlng.lat, e.latlng.lng, 'map_pin', map.getZoom());
+        });
+
+        // Initialize autocomplete listener on search input
+        const searchInput = document.getElementById('location_search_input');
+        if (searchInput) {
+            searchInput.addEventListener('input', onSearchInputChange);
+        }
+
+        // Close autocomplete suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            const wrapper = document.querySelector('.location-search-wrapper');
+            if (wrapper && !wrapper.contains(e.target)) {
+                const suggBox = document.getElementById('location_suggestions_box');
+                if (suggBox) suggBox.classList.add('d-none');
+            }
+        });
+    } catch (e) {
+        console.warn("Leaflet map initialization skipped/offline:", e);
+    }
+}
+
+function setMapLocation(lat, lon, address, source, zoom) {
+    const roundLat = parseFloat(lat).toFixed(6);
+    const roundLon = parseFloat(lon).toFixed(6);
+    const finalAddr = address || `Location at ${roundLat}, ${roundLon}`;
+    const targetZoom = zoom || 15;
+
+    // 1. Update form inputs
+    document.getElementById('latitude').value = roundLat;
+    document.getElementById('longitude').value = roundLon;
+    document.getElementById('location_source').value = source || 'manual';
+    document.getElementById('location_address').value = finalAddr;
+
+    // 2. Update prominent Selected Location card
+    const displayEl = document.getElementById('selected_location_display');
+    if (displayEl) {
+        displayEl.textContent = finalAddr;
+    }
+    const coordsEl = document.getElementById('display_coords');
+    if (coordsEl) {
+        coordsEl.textContent = `${roundLat}, ${roundLon}`;
+    }
+    const badgeEl = document.getElementById('location_badge_source');
+    if (badgeEl) {
+        if (source === 'device') {
+            badgeEl.textContent = 'GPS Device';
+            badgeEl.className = 'badge location-badge location-badge-gps small';
+        } else if (source === 'search') {
+            badgeEl.textContent = 'Location Search';
+            badgeEl.className = 'badge location-badge location-badge-search small';
+        } else if (source === 'map_pin') {
+            badgeEl.textContent = 'Map Pin';
+            badgeEl.className = 'badge location-badge location-badge-pin small';
+        } else {
+            badgeEl.textContent = 'Manual';
+            badgeEl.className = 'badge location-badge location-badge-manual small';
+        }
+    }
+
+    // Visual pulse effect on selected box
+    const cardBox = document.getElementById('selected_location_box');
+    if (cardBox) {
+        cardBox.classList.remove('updated-highlight');
+        void cardBox.offsetWidth; // trigger reflow
+        cardBox.classList.add('updated-highlight');
+        setTimeout(() => cardBox.classList.remove('updated-highlight'), 1800);
+    }
+
+    // 3. Update Leaflet map and marker
+    if (map) {
+        map.setView([roundLat, roundLon], targetZoom);
+        if (!marker) {
+            marker = L.marker([roundLat, roundLon], { draggable: true }).addTo(map);
+            marker.on('dragend', onMarkerDragEnd);
+        } else {
+            marker.setLatLng([roundLat, roundLon]);
+        }
+        marker.bindPopup(`<strong>${escapeHtml(finalAddr)}</strong><br><small class="text-muted">${roundLat}, ${roundLon}</small>`).openPopup();
+    }
+}
+
+function reverseGeocodeAndSetLocation(lat, lon, source, zoom) {
+    const roundLat = parseFloat(lat).toFixed(6);
+    const roundLon = parseFloat(lon).toFixed(6);
+
+    const displayEl = document.getElementById('selected_location_display');
+    if (displayEl) {
+        displayEl.innerHTML = '<span class="text-info"><i class="fa-solid fa-spinner fa-spin me-1"></i> Resolving address from coordinates...</span>';
+    }
+
+    fetch(`/api/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Reverse geocoding network response failed');
+            return response.json();
+        })
+        .then(data => {
+            const addr = data.display_name || `Location at ${roundLat}, ${roundLon}`;
+            setMapLocation(lat, lon, addr, source, zoom);
+        })
+        .catch(err => {
+            console.warn("Reverse geocode failed, using raw coordinates:", err);
+            setMapLocation(lat, lon, `Location at ${roundLat}, ${roundLon}`, source, zoom);
+        });
+}
+
+function handleSearchKeydown(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        searchLocationManual();
+    }
+}
+
+function onSearchInputChange(e) {
+    clearTimeout(searchDebounceTimer);
+    const q = e.target.value.trim();
+    const suggBox = document.getElementById('location_suggestions_box');
+
+    if (q.length < 2) {
+        if (suggBox) suggBox.classList.add('d-none');
+        return;
+    }
+
+    searchDebounceTimer = setTimeout(() => {
+        fetch(`/api/location/search?q=${encodeURIComponent(q)}&limit=6`)
+            .then(res => res.json())
+            .then(data => {
+                const results = data.results || [];
+                if (results.length > 0) {
+                    renderSuggestionsDropdown(results);
+                } else {
+                    if (suggBox) suggBox.classList.add('d-none');
+                }
+            })
+            .catch(() => {
+                if (suggBox) suggBox.classList.add('d-none');
+            });
+    }, 300);
+}
+
+function renderSuggestionsDropdown(results) {
+    const suggBox = document.getElementById('location_suggestions_box');
+    if (!suggBox) return;
+
+    suggBox.innerHTML = '';
+    results.forEach((item, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'location-suggestion-item';
+        
+        const shortTitle = item.short_name || item.display_name.split(',')[0];
+        const categoryTag = item.type ? `<span class="suggestion-badge ms-2">${escapeHtml(item.type)}</span>` : '';
+        
+        itemDiv.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="suggestion-title">${escapeHtml(shortTitle)}</span>
+                ${categoryTag}
+            </div>
+            <div class="suggestion-desc text-truncate" title="${escapeHtml(item.display_name)}">
+                <i class="fa-solid fa-location-dot me-1 location-icon"></i> ${escapeHtml(item.display_name)}
+            </div>
+        `;
+
+        itemDiv.addEventListener('click', () => {
+            applySearchResult(item);
+            suggBox.classList.add('d-none');
+        });
+
+        suggBox.appendChild(itemDiv);
+    });
+
+    suggBox.classList.remove('d-none');
+}
+
+function searchLocationManual() {
+    const searchInput = document.getElementById('location_search_input');
+    const q = searchInput ? searchInput.value.trim() : '';
+    const statusBox = document.getElementById('location_search_status');
+    const suggBox = document.getElementById('location_suggestions_box');
+    const searchBtn = document.getElementById('btnLocationSearch');
+
+    if (!q) {
+        if (statusBox) {
+            statusBox.textContent = "Please enter a location name, address, or landmark to search.";
+            statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
+            statusBox.classList.remove('d-none');
+        }
+        return;
+    }
+
+    if (statusBox) statusBox.classList.add('d-none');
+    const origBtnHtml = searchBtn.innerHTML;
+    searchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Searching...';
+    searchBtn.disabled = true;
+
+    fetch(`/api/location/search?q=${encodeURIComponent(q)}&limit=6`)
+        .then(res => {
+            if (!res.ok) throw new Error("Search service response not OK");
+            return res.json();
+        })
+        .then(data => {
+            searchBtn.innerHTML = origBtnHtml;
+            searchBtn.disabled = false;
+            const results = data.results || [];
+
+            if (results.length === 0) {
+                if (statusBox) {
+                    statusBox.textContent = "Location not found. Please try another search.";
+                    statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
+                    statusBox.classList.remove('d-none');
+                }
+                if (suggBox) suggBox.classList.add('d-none');
+            } else {
+                if (statusBox) statusBox.classList.add('d-none');
+                // Automatically apply best matching location
+                applySearchResult(results[0]);
+
+                // Show disambiguation dropdown if multiple places match
+                if (results.length > 1) {
+                    renderSuggestionsDropdown(results);
+                } else {
+                    if (suggBox) suggBox.classList.add('d-none');
+                }
+            }
+        })
+        .catch(err => {
+            searchBtn.innerHTML = origBtnHtml;
+            searchBtn.disabled = false;
+            console.error("Manual search error:", err);
+            if (statusBox) {
+                statusBox.textContent = "Error communicating with location search service. Please try again or enter location manually.";
+                statusBox.className = "alert alert-danger py-2 px-3 small mb-3";
+                statusBox.classList.remove('d-none');
+            }
+        });
+}
+
+function applySearchResult(item) {
+    let zoomLevel = 15;
+    const itemType = (item.type || '').toLowerCase();
+    if (['college', 'university', 'hospital', 'building', 'amenity', 'monument', 'station'].includes(itemType)) {
+        zoomLevel = 17;
+    } else if (['city', 'town', 'administrative'].includes(itemType)) {
+        zoomLevel = 13;
+    } else if (['country', 'state'].includes(itemType)) {
+        zoomLevel = 7;
+    }
+
+    setMapLocation(item.lat, item.lon, item.display_name, 'search', zoomLevel);
+
+    const searchInput = document.getElementById('location_search_input');
+    if (searchInput) {
+        searchInput.value = item.short_name || item.display_name.split(',')[0];
+    }
+
+    const suggBox = document.getElementById('location_suggestions_box');
+    if (suggBox) suggBox.classList.add('d-none');
+
+    const statusBox = document.getElementById('location_search_status');
+    if (statusBox) statusBox.classList.add('d-none');
+
+    showToast('Map updated to searched location.', 'success');
+}
+
+function locateDevicePosition() {
+    const statusBox = document.getElementById('location_search_status');
+    const btn = document.getElementById('btnUseCurrentLocation');
+
+    if (!navigator.geolocation) {
+        if (statusBox) {
+            statusBox.textContent = "Geolocation is not supported by your browser.";
+            statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
+            statusBox.classList.remove('d-none');
+        } else {
+            alert("Geolocation is not supported by your browser.");
+        }
+        return;
+    }
+
+    const origBtnHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1 text-info"></i> Locating GPS...';
+        btn.disabled = true;
+    }
+    if (statusBox) statusBox.classList.add('d-none');
+
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+
+            // Fetch reverse geocoded human-readable address
+            fetch(`/api/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (btn) {
+                        btn.innerHTML = origBtnHtml;
+                        btn.disabled = false;
+                    }
+                    const readableAddress = data.display_name || `Location at ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                    setMapLocation(lat, lon, readableAddress, 'device', 16);
+                    showToast('Current GPS location & readable address captured.', 'success');
+                })
+                .catch(err => {
+                    if (btn) {
+                        btn.innerHTML = origBtnHtml;
+                        btn.disabled = false;
+                    }
+                    console.warn("Reverse geocode on current location failed:", err);
+                    setMapLocation(lat, lon, `Location at ${lat.toFixed(6)}, ${lon.toFixed(6)}`, 'device', 16);
+                    showToast('Current GPS coordinates captured.', 'info');
+                });
+        },
+        function(err) {
+            if (btn) {
+                btn.innerHTML = origBtnHtml;
+                btn.disabled = false;
+            }
+            let userMsg = "Unable to retrieve device location: " + err.message;
+            if (err.code === 1) { // PERMISSION_DENIED
+                userMsg = "Location permission denied. Please allow location access in your browser or search for your location manually.";
+            } else if (err.code === 2) { // POSITION_UNAVAILABLE
+                userMsg = "Location information is unavailable. Please search for your location manually.";
+            } else if (err.code === 3) { // TIMEOUT
+                userMsg = "The request to get user location timed out. Please try again or search manually.";
+            }
+
+            if (statusBox) {
+                statusBox.textContent = userMsg;
+                statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
+                statusBox.classList.remove('d-none');
+            } else {
+                alert(userMsg);
+            }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+}
+
+function onMarkerDragEnd(e) {
+    const pos = marker.getLatLng();
+    reverseGeocodeAndSetLocation(pos.lat, pos.lng, 'map_pin', map.getZoom());
+}
+
+function updateMarkerFromInputs() {
+    const lat = parseFloat(document.getElementById('latitude').value);
+    const lon = parseFloat(document.getElementById('longitude').value);
+    if (!isNaN(lat) && !isNaN(lon)) {
+        reverseGeocodeAndSetLocation(lat, lon, 'manual', map ? map.getZoom() : 15);
+    }
+}
+
+function onManualAddressInput() {
+    const typed = document.getElementById('location_address').value;
+    const displayEl = document.getElementById('selected_location_display');
+    if (displayEl) {
+        displayEl.textContent = typed || "No location selected yet. Search above, click on the map, or click 'Use Current Location'.";
+    }
+    const badgeEl = document.getElementById('location_badge_source');
+    if (badgeEl) {
+        badgeEl.textContent = 'Manual Input';
+        badgeEl.className = 'badge location-badge location-badge-manual small';
+    }
+}
+
+function resetMapMarker() {
+    if (marker && map) {
+        map.removeLayer(marker);
+        marker = null;
+    }
+    document.getElementById('latitude').value = '';
+    document.getElementById('longitude').value = '';
+    document.getElementById('location_source').value = 'manual';
+    document.getElementById('location_address').value = '';
+    
+    const searchInput = document.getElementById('location_search_input');
+    if (searchInput) searchInput.value = '';
+
+    const displayEl = document.getElementById('selected_location_display');
+    if (displayEl) {
+        displayEl.textContent = "No location selected yet. Search above, click on the map, or click 'Use Current Location'.";
+    }
+
+    const coordsEl = document.getElementById('display_coords');
+    if (coordsEl) coordsEl.textContent = "Not set";
+
+    const badgeEl = document.getElementById('location_badge_source');
+    if (badgeEl) {
+        badgeEl.textContent = 'Manual / Unset';
+        badgeEl.className = 'badge location-badge location-badge-manual small';
+    }
+
+    const statusBox = document.getElementById('location_search_status');
+    if (statusBox) statusBox.classList.add('d-none');
+
+    const suggBox = document.getElementById('location_suggestions_box');
+    if (suggBox) suggBox.classList.add('d-none');
+}
+
+// =========================================================================
+// WEB SPEECH RECOGNITION (DICTATION)
+// =========================================================================
+function toggleSpeechRecognition() {
+    if (isListening) {
+        stopSpeechRecognition();
+    } else {
+        startSpeechRecognition();
+    }
+}
+
+function startSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const errBox = document.getElementById('speechErrorAlert');
+    errBox.classList.add('d-none');
+
+    if (!SpeechRecognition) {
+        errBox.textContent = "Speech recognition is not supported in this browser. Please type the narrative manually.";
+        errBox.classList.remove('d-none');
+        return;
+    }
+
+    try {
+        speechRecognizer = new SpeechRecognition();
+        speechRecognizer.lang = document.getElementById('speechLangSelect').value || 'en-IN';
+        speechRecognizer.continuous = true;
+        speechRecognizer.interimResults = true;
+
+        speechRecognizer.onstart = function() {
+            isListening = true;
+            document.getElementById('micToggleBtn').classList.add('recording');
+            document.getElementById('micText').textContent = "Stop Dictation";
+            document.getElementById('speechStatusText').style.display = 'inline-flex';
+        };
+
+        speechRecognizer.onresult = function(event) {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript + ' ';
+                }
+            }
+            if (finalTranscript) {
+                const narrativeBox = document.getElementById('narrative');
+                narrativeBox.value = (narrativeBox.value + ' ' + finalTranscript).trim();
+                document.getElementById('transcription_raw').value += finalTranscript;
+            }
+        };
+
+        speechRecognizer.onerror = function(event) {
+            errBox.textContent = `Speech recognition notice: ${event.error}. You can continue by typing manually.`;
+            errBox.classList.remove('d-none');
+            stopSpeechRecognition();
+        };
+
+        speechRecognizer.onend = function() {
+            stopSpeechRecognition();
+        };
+
+        speechRecognizer.start();
+    } catch (e) {
+        errBox.textContent = `Could not start speech recognition: ${e.message}`;
+        errBox.classList.remove('d-none');
+        stopSpeechRecognition();
+    }
+}
+
+function stopSpeechRecognition() {
+    isListening = false;
+    if (speechRecognizer) {
+        try { speechRecognizer.stop(); } catch(e) {}
+    }
+    document.getElementById('micToggleBtn').classList.remove('recording');
+    document.getElementById('micText').textContent = "Start Dictation";
+    document.getElementById('speechStatusText').style.display = 'none';
+}
+
+// =========================================================================
+// OPTIONAL AUDIO NOTE RECORDER
+// =========================================================================
+async function toggleAudioRecorder() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        document.getElementById('recordAudioText').textContent = "Record Audio Note";
+        document.getElementById('recordAudioBtn').classList.remove('btn-danger');
+        document.getElementById('recordAudioBtn').classList.add('btn-outline-info');
+    } else {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Microphone recording is not supported in this browser.");
+            return;
+        }
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                document.getElementById('audioPlayback').src = audioUrl;
+                document.getElementById('audioPlaybackBox').classList.remove('d-none');
+                stream.getTracks().forEach(t => t.stop());
+            };
+            mediaRecorder.start();
+            document.getElementById('recordAudioText').textContent = "Stop Recording";
+            document.getElementById('recordAudioBtn').classList.remove('btn-outline-info');
+            document.getElementById('recordAudioBtn').classList.add('btn-danger');
+        } catch (e) {
+            alert("Microphone permission denied or audio device unavailable.");
+        }
+    }
+}
+
+async function uploadRecordedAudio() {
+    if (audioChunks.length === 0) return;
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('csrf_token', CSRF_TOKEN);
+    formData.append('evidence_files', audioBlob, 'recorded_audio_note.webm');
+
+    try {
+        const res = await fetch(EVIDENCE_UPLOAD_URL, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast('Audio note attached as case evidence.', 'success');
+            discardRecordedAudio();
+            refreshEvidenceList(data.evidence);
+        } else {
+            alert(data.error || 'Failed to upload audio.');
+        }
+    } catch (e) {
+        alert('Upload failed: ' + e.message);
+    }
+}
+
+function discardRecordedAudio() {
+    audioChunks = [];
+    document.getElementById('audioPlaybackBox').classList.add('d-none');
+    document.getElementById('audioPlayback').src = '';
+}
+
+// =========================================================================
+// EVIDENCE MANAGEMENT & DRAG-AND-DROP
+// =========================================================================
+function selectFacialRef(type, cardEl) {
+    document.querySelectorAll('.ref-option-card').forEach(c => c.classList.remove('selected'));
+    cardEl.classList.add('selected');
+    const radio = document.getElementById(type === 'photo_normal' ? 'ref_normal' : 'ref_none');
+    if (radio) radio.checked = true;
+}
+
+const dropzone = document.getElementById('dropzoneBox');
+if (dropzone) {
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', e => { e.preventDefault(); dropzone.classList.remove('dragover'); });
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) handleEvidenceUpload(e.dataTransfer.files);
+    });
+}
+
+async function handleEvidenceUpload(files) {
+    if (!files || files.length === 0) return;
+    if (files.length > 5) {
+        alert("Maximum 5 files can be uploaded at one time.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('csrf_token', CSRF_TOKEN);
+    for (let i = 0; i < files.length; i++) {
+        formData.append('evidence_files', files[i]);
+    }
+
+    try {
+        showToast('Uploading evidence...', 'info');
+        const res = await fetch(EVIDENCE_UPLOAD_URL, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast('Evidence uploaded successfully.', 'success');
+            refreshEvidenceList(data.evidence);
+        } else {
+            alert(data.error || 'Evidence upload rejected.');
+        }
+    } catch (e) {
+        alert('Upload failed: ' + e.message);
+    }
+}
+
+function refreshEvidenceList(evidenceList) {
+    const container = document.getElementById('attachedEvidenceList');
+    const notice = document.getElementById('noEvidenceNotice');
+    if (notice) notice.remove();
+
+    if (!evidenceList || evidenceList.length === 0) {
+        container.innerHTML = '<div class="text-muted small text-center py-3" id="noEvidenceNotice">No evidence files attached yet.</div>';
+        return;
+    }
+
+    let html = '';
+    evidenceList.forEach(ev => {
+        let iconHtml = '<i class="fa-solid fa-paperclip text-info"></i>';
+        if (ev.evidence_type === 'photo') iconHtml = '<i class="fa-solid fa-image text-info"></i>';
+        else if (ev.evidence_type === 'audio') iconHtml = '<i class="fa-solid fa-file-audio text-info"></i>';
+        else if (ev.evidence_type === 'document') iconHtml = '<i class="fa-solid fa-file-lines text-info"></i>';
+        const sizeKb = (ev.file_size_bytes / 1024).toFixed(1);
+        const sha = ev.sha256_hex ? ev.sha256_hex.substring(0, 8) : 'N/A';
+        html += `
+            <div class="evidence-item-card" id="ev-card-${ev.id}">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="fs-4">${iconHtml}</span>
+                    <div class="evidence-meta">
+                        <span class="evidence-name">${ev.original_filename || 'Attachment'}</span>
+                        <span class="evidence-sub">${sizeKb} KB &bull; ${ev.evidence_type} &bull; SHA: ${sha}...</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="/complaints/${COMPLAINT_ID}/evidence/${ev.id}/view" target="_blank" class="btn btn-sm btn-outline-info">View</a>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteEvidenceFile(${ev.id})">Remove</button>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+
+    // Also update review screen summary list
+    const revCount = document.getElementById('rev_ev_count');
+    if (revCount) revCount.textContent = evidenceList.length;
+    const revList = document.getElementById('rev_ev_list');
+    if (revList) {
+        revList.innerHTML = evidenceList.map(ev => 
+            `<li class="small text-secondary">&bull; ${ev.original_filename} (${(ev.file_size_bytes/1024).toFixed(1)} KB, ${ev.evidence_type})</li>`
+        ).join('');
+    }
+}
+
+async function deleteEvidenceFile(evidenceId) {
+    if (!confirm("Are you sure you want to remove this attached evidence?")) return;
+    try {
+        const res = await fetch(`/complaints/${COMPLAINT_ID}/evidence/${evidenceId}/delete`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            const card = document.getElementById(`ev-card-${evidenceId}`);
+            if (card) card.remove();
+            showToast('Attachment removed.', 'info');
+            refreshEvidenceList(data.remaining_evidence);
+        } else {
+            alert(data.error || 'Failed to remove file.');
+        }
+    } catch (e) {
+        alert('Action failed: ' + e.message);
+    }
+}
+
+// =========================================================================
+// TOAST NOTIFICATION HELPER
+// =========================================================================
+function showToast(msg, type='info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const t = document.createElement('div');
+    t.className = `glass-toast toast-${type}`;
+    t.setAttribute('role', 'alert');
+    const iconHtml = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : (type === 'danger' ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-circle-info"></i>');
+    t.innerHTML = `
+        <div class="toast-icon">${iconHtml}</div>
+        <div class="toast-content">${msg}</div>
+        <button type="button" class="toast-close-btn" onclick="dismissToast(this.closest('.glass-toast'))">&times;</button>
+    `;
+    container.appendChild(t);
+    setTimeout(() => dismissToast(t), 4000);
+}
+</script>
+{% endblock %}

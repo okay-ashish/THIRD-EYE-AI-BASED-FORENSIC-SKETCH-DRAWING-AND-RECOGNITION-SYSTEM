@@ -1,0 +1,467 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Investigative Case Dossier Review{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Detailed administrative dossier review: audit log, evidence inspection, citizen messages, and forensic actions.">
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 1200px; margin: 0 auto;">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 small text-secondary mb-1">
+                <a href="{{ url_for('admin_dashboard') }}" class="text-secondary text-decoration-none">&larr; Admin Case Management</a>
+                <span>/</span>
+                <span class="text-light">Case Review Dossier</span>
+            </div>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <h2 class="fw-bold text-light mb-0"><i class="fa-solid fa-folder-open me-2 text-info"></i>Case Dossier: <code>{{ complaint.complaint_number }}</code></h2>
+                {% if complaint.status == 'draft' %}
+                    <span class="badge bg-secondary">Draft</span>
+                {% elif complaint.status == 'submitted' %}
+                    <span class="badge bg-info text-dark">Newly Submitted</span>
+                {% elif complaint.status == 'under_review' %}
+                    <span class="badge bg-primary">Under Review</span>
+                {% elif complaint.status == 'information_requested' %}
+                    <span class="badge bg-warning text-dark"><i class="fa-solid fa-triangle-exclamation me-1"></i>Info Requested</span>
+                {% elif complaint.status == 'approved' %}
+                    <span class="badge bg-success">Approved</span>
+                {% elif complaint.status == 'assigned' %}
+                    <span class="badge bg-info">Assigned to Officer</span>
+                {% elif complaint.status == 'investigation_in_progress' %}
+                    <span class="badge bg-success">Investigation in Progress</span>
+                {% elif complaint.status == 'awaiting_further_evidence' %}
+                    <span class="badge bg-warning text-dark">Awaiting Evidence</span>
+                {% elif complaint.status == 'rejected' %}
+                    <span class="badge bg-danger">Rejected</span>
+                {% elif complaint.status == 'closed' %}
+                    <span class="badge bg-secondary">Closed</span>
+                {% endif %}
+                <span class="badge" style="background: rgba(0, 206, 201, 0.12); color: var(--accent-secondary); border: 1px solid var(--border-glass);">
+                    Branch: {{ complaint.facial_reference_type|replace('_', ' ')|capitalize }}
+                </span>
+            </div>
+        </div>
+        
+        <!-- Quick Link to Workspace if approved/active -->
+        <div class="d-flex align-items-center gap-2">
+            {% if complaint.status in ['approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence', 'closed'] %}
+                <a href="{{ url_for('case_workspace', complaint_id=complaint.id) }}" class="btn-neon-primary" style="padding: 9px 22px; font-size: 0.88rem;">
+                    <i class="fa-solid fa-briefcase me-1"></i> Enter Case Workspace &rarr;
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Administrative Action Bar -->
+    <div class="card glass-card p-3 mb-4" style="background: var(--bg-surface-strong); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md);">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold text-light"><i class="fa-solid fa-gear me-1"></i> Administrative Actions:</span>
+                <span class="small text-secondary">(Permitted by case state)</span>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                {% if complaint.status == 'submitted' %}
+                    <form method="POST" action="{{ url_for('admin_case_action', complaint_id=complaint.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="action_type" value="start_review">
+                        <button type="submit" class="btn btn-sm btn-info text-dark fw-bold">
+                            <i class="fa-solid fa-eye me-1"></i> Start Review
+                        </button>
+                    </form>
+                {% endif %}
+
+                {% if complaint.status in ['submitted', 'under_review'] %}
+                    <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#requestInfoModal">
+                        <i class="fa-solid fa-bullhorn me-1"></i> Request Information
+                    </button>
+                    <form method="POST" action="{{ url_for('admin_case_action', complaint_id=complaint.id) }}" class="d-inline" onsubmit="return confirm('Approve this complaint for formal forensic investigation?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <input type="hidden" name="action_type" value="approve">
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="fa-solid fa-check me-1"></i> Approve Complaint
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                        <i class="fa-solid fa-xmark me-1"></i> Reject Complaint
+                    </button>
+                {% endif %}
+
+                {% if complaint.status in ['approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence'] %}
+                    <button type="button" class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#assignOfficerModal">
+                        <i class="fa-solid fa-user-shield me-1"></i> {% if complaint.assigned_officer_name %}Reassign Officer{% else %}Assign Investigating Officer{% endif %}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#updateInvestigationModal">
+                        <i class="fa-solid fa-pen-to-square me-1"></i> Update Status
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Officer Banner (If Assigned) -->
+    {% if complaint.assigned_officer_name %}
+    <div class="alert alert-dark border-info d-flex flex-wrap justify-content-between align-items-center gap-3 p-3 mb-4" style="background: rgba(9, 132, 227, 0.08); border-radius: var(--border-radius-md);">
+        <div class="d-flex align-items-center gap-3">
+            <span class="fs-3 text-info"><i class="fa-solid fa-user-shield"></i></span>
+            <div>
+                <div class="fw-bold text-light">Assigned Investigating Officer: {{ complaint.assigned_officer_name }} (Badge ID: {{ complaint.assigned_officer_id }})</div>
+                <div class="small text-secondary">
+                    Station: {{ complaint.assigned_station }} &bull; Contact: {{ complaint.assigned_officer_contact or 'None listed' }}
+                </div>
+            </div>
+        </div>
+        <span class="badge bg-info text-dark">Active Officer</span>
+    </div>
+    {% endif %}
+
+    <!-- Dossier Content Grid -->
+    <div class="row g-4 mb-4">
+        <!-- Left: Incident & Suspect Narrative Dossier -->
+        <div class="col-lg-7">
+            <!-- Incident Details Card -->
+            <div class="card glass-card p-4 mb-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+                <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom border-secondary">
+                    <span class="fs-5 text-info"><i class="fa-solid fa-file-pen"></i></span>
+                    <h5 class="fw-bold text-light mb-0">Incident Categorization &amp; Location</h5>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-6">
+                        <div class="small text-secondary">Title</div>
+                        <div class="fw-semibold text-light">{{ complaint.title or '(Not entered)' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="small text-secondary">Category</div>
+                        <div class="fw-semibold text-light">{{ complaint.category or '(Uncategorized)' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="small text-secondary">Incident Date &amp; Time</div>
+                        <div class="text-light">{{ complaint.incident_at.strftime('%d %b %Y, %H:%M') if complaint.incident_at else 'Unspecified' }}</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="small text-secondary">Complainant / Reporter</div>
+                        <div class="text-light">{{ complaint.creator.full_name or complaint.creator.username }} ({{ complaint.reporter_relationship or 'Victim' }})</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="small text-secondary">Incident Address</div>
+                        <div class="text-light">{{ complaint.location_address or 'Unspecified street address' }}</div>
+                    </div>
+                    {% if complaint.latitude and complaint.longitude %}
+                    <div class="col-12">
+                        <div class="small text-secondary">GPS Coordinates{% if complaint.location_source and complaint.location_source != 'None' %} ({{ complaint.location_source|replace('_', ' ')|capitalize }}){% endif %}</div>
+                        <code class="text-info">{{ complaint.latitude }}, {{ complaint.longitude }}</code>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Written Narrative -->
+                <div class="mt-3">
+                    <div class="small text-secondary mb-1">Official Written Incident Narrative:</div>
+                    <div class="p-3 text-light" style="background: rgba(15, 20, 25, 0.6); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md); line-height: 1.6; white-space: pre-wrap;">{{ complaint.narrative or '(No narrative entered)' }}</div>
+                </div>
+
+                {% if complaint.transcription_raw %}
+                <div class="mt-3">
+                    <div class="small text-muted mb-1"><i class="fa-solid fa-microphone me-1"></i> Speech Dictation Raw Stream:</div>
+                    <div class="p-2 small text-secondary" style="background: rgba(15, 20, 25, 0.4); border-radius: var(--border-radius-sm);">{{ complaint.transcription_raw }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Suspect Physical Attributes Card -->
+            <div class="card glass-card p-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+                <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom border-secondary">
+                    <span class="fs-5 text-info"><i class="fa-solid fa-user-secret"></i></span>
+                    <h5 class="fw-bold text-light mb-0">Suspect Description &amp; Physical Profile</h5>
+                </div>
+                <div class="row g-3">
+                    <div class="col-sm-4">
+                        <div class="small text-secondary">Gender Presentation</div>
+                        <div class="text-light">{{ complaint.suspect_gender or 'Unknown' }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="small text-secondary">Approximate Age</div>
+                        <div class="text-light">{{ complaint.suspect_approx_age or 'Unknown' }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="small text-secondary">Height / Build</div>
+                        <div class="text-light">{{ complaint.suspect_height or 'Unknown' }} / {{ complaint.suspect_build or 'Unknown' }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="small text-secondary">Complexion</div>
+                        <div class="text-light">{{ complaint.suspect_complexion or 'Unknown' }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="small text-secondary">Hair</div>
+                        <div class="text-light">{{ complaint.suspect_hair or 'Unknown' }}</div>
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="small text-secondary">Eyes</div>
+                        <div class="text-light">{{ complaint.suspect_eyes or 'Unknown' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="small text-secondary">Clothing &amp; Attire</div>
+                        <div class="text-light">{{ complaint.suspect_clothing or 'None reported' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="small text-secondary">Mask / Covering Description</div>
+                        <div class="text-light">{{ complaint.suspect_mask_description or 'None reported' }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="small text-secondary">Identifying Marks / Scars / Tattoos</div>
+                        <div class="text-light">{{ complaint.suspect_identifying_marks or 'None reported' }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Evidence & Audit Timeline -->
+        <div class="col-lg-5">
+            <!-- Evidence Files Card -->
+            <div class="card glass-card p-4 mb-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+                <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fs-5 text-info"><i class="fa-solid fa-paperclip"></i></span>
+                        <h5 class="fw-bold text-light mb-0">Attached Evidence Files ({{ evidence_list|length }})</h5>
+                    </div>
+                </div>
+                {% if evidence_list %}
+                    <div class="d-flex flex-column gap-2">
+                        {% for ev in evidence_list %}
+                        <div class="p-3" style="background: rgba(15, 20, 25, 0.5); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md);">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fs-4">
+                                        {% if ev.evidence_type == 'photo' %}<i class="fa-solid fa-image text-info"></i>
+                                        {% elif ev.evidence_type == 'audio' %}<i class="fa-solid fa-file-audio text-info"></i>
+                                        {% elif ev.evidence_type == 'sketch' %}<i class="fa-solid fa-pen-nib text-info"></i>
+                                        {% elif ev.evidence_type == 'reconstructed_face' %}<i class="fa-solid fa-wand-magic-sparkles text-info"></i>
+                                        {% elif ev.evidence_type == 'variation' %}<i class="fa-solid fa-masks-theater text-info"></i>
+                                        {% elif ev.evidence_type == 'poster' %}<i class="fa-solid fa-bullhorn text-info"></i>
+                                        {% else %}<i class="fa-solid fa-file-lines text-info"></i>{% endif %}
+                                    </span>
+                                    <div>
+                                        <div class="fw-semibold text-light text-truncate" style="max-width: 200px;">{{ ev.original_filename or 'Attachment' }}</div>
+                                        <div class="small text-secondary">
+                                            {{ ((ev.file_size_bytes or 0) / 1024)|round(1) }} KB &bull; {{ ev.evidence_type }} &bull; {{ ev.source_kind }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <a href="{{ url_for('view_complaint_evidence', complaint_id=complaint.id, evidence_id=ev.id) }}" target="_blank" class="btn btn-sm btn-outline-info text-nowrap">
+                                        View Stream
+                                    </a>
+                                    {% if ev.evidence_type == 'poster' %}
+                                        {% if ev.access_level == 'public_notice' %}
+                                            <span class="badge bg-success" style="font-size: 0.72rem;">Approved Notice</span>
+                                        {% else %}
+                                            <form method="POST" action="{{ url_for('approve_case_poster', complaint_id=complaint.id, evidence_id=ev.id) }}" class="d-inline">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-success" style="font-size: 0.75rem;">
+                                                    Approve Notice
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="mt-2 small text-muted font-monospace" style="font-size: 0.72rem;">
+                                SHA-256: {{ ev.sha256_hex[:16] if ev.sha256_hex else 'N/A' }}... &bull; Access: {{ ev.access_level }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4 text-secondary small">
+                        No evidence files attached to this complaint.
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Case Audit Timeline Card -->
+            <div class="card glass-card p-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+                <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom border-secondary">
+                    <span class="fs-5 text-info"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                    <h5 class="fw-bold text-light mb-0">Case Investigation Audit Timeline</h5>
+                </div>
+                {% if timeline_entries %}
+                    <div class="timeline-stream d-flex flex-column gap-3">
+                        {% for entry in timeline_entries %}
+                        <div class="p-3" style="background: rgba(15, 20, 25, 0.5); border-left: 3px solid var(--accent-secondary); border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-light small text-uppercase" style="letter-spacing: 0.5px;">{{ entry.event_type|replace('_', ' ') }}</span>
+                                <span class="small text-muted" style="font-size: 0.75rem;">{{ entry.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                            </div>
+                            <div class="text-secondary small mb-1">{{ entry.message or 'No additional notes' }}</div>
+                            <div class="d-flex justify-content-between align-items-center small text-muted" style="font-size: 0.72rem;">
+                                <span>Actor: {{ entry.actor.full_name or entry.actor.username if entry.actor else 'System' }}</span>
+                                {% if entry.previous_status and entry.new_status %}
+                                    <span><code>{{ entry.previous_status }}</code> &rarr; <code>{{ entry.new_status }}</code></span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4 text-secondary small">
+                        No timeline records registered yet.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: REQUEST INFORMATION FROM CITIZEN
+     ========================================================================= -->
+<div class="modal fade" id="requestInfoModal" tabindex="-1" aria-labelledby="requestInfoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass-content">
+            <div class="modal-glass-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-glass-title" id="requestInfoModalLabel">
+                    <i class="fa-solid fa-bullhorn me-2 text-warning"></i>Request Additional Information
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('admin_case_action', complaint_id=complaint.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action_type" value="request_info">
+                <div class="modal-body p-4">
+                    <p class="small text-secondary mb-3">
+                        Specify the exact details, clarifications, or missing evidence required from the citizen complainant. The complaint will enter <code>information_requested</code> status.
+                    </p>
+                    <div class="mb-3">
+                        <label for="info_message" class="form-label text-light fw-medium">Information Request Message</label>
+                        <textarea class="form-control glass-input text-light" id="info_message" name="info_message" rows="4" required
+                                  placeholder="e.g. Please clarify the exact time observed, vehicle registration numbers, or provide any additional photographs of the suspect..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-glass-footer d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold btn-sm px-3">Send Official Request</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: REJECT COMPLAINT WITH RECORDED REASON
+     ========================================================================= -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass-content">
+            <div class="modal-glass-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-glass-title" id="rejectModalLabel">
+                    <span class="text-danger"><i class="fa-solid fa-xmark me-1"></i></span> Reject Crime Complaint
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('admin_case_action', complaint_id=complaint.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action_type" value="reject">
+                <div class="modal-body p-4">
+                    <p class="small text-secondary mb-3">
+                        Rejecting a complaint closes the intake file and records the decision in the permanent audit timeline. A formal reason is mandatory.
+                    </p>
+                    <div class="mb-3">
+                        <label for="rejection_reason" class="form-label text-light fw-medium">Mandatory Rejection Reason</label>
+                        <textarea class="form-control glass-input text-light" id="rejection_reason" name="rejection_reason" rows="4" required
+                                  placeholder="e.g. Jurisdiction discrepancy; incident does not constitute a cognizable offense; civil dispute matter..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-glass-footer d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger btn-sm px-3">Confirm Rejection</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: ASSIGN INVESTIGATING OFFICER
+     ========================================================================= -->
+<div class="modal fade" id="assignOfficerModal" tabindex="-1" aria-labelledby="assignOfficerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass-content">
+            <div class="modal-glass-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-glass-title" id="assignOfficerModalLabel">
+                    <i class="fa-solid fa-user-shield me-2 text-info"></i>Assign Investigating Officer
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('admin_case_action', complaint_id=complaint.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action_type" value="assign_officer">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label for="officer_name" class="form-label text-light fw-medium">Officer Full Name</label>
+                        <input type="text" class="form-control glass-input text-light" id="officer_name" name="officer_name" required
+                               value="{{ complaint.assigned_officer_name or '' }}" placeholder="e.g. Inspector K. Rajan">
+                    </div>
+                    <div class="mb-3">
+                        <label for="officer_id" class="form-label text-light fw-medium">Officer Staff / Badge ID</label>
+                        <input type="text" class="form-control glass-input text-light" id="officer_id" name="officer_id" required
+                               value="{{ complaint.assigned_officer_id or '' }}" placeholder="e.g. TN-POL-4409">
+                    </div>
+                    <div class="mb-3">
+                        <label for="station" class="form-label text-light fw-medium">Police Station / Unit</label>
+                        <input type="text" class="form-control glass-input text-light" id="station" name="station" required
+                               value="{{ complaint.assigned_station or '' }}" placeholder="e.g. Central Cyber Crime Cell, Chennai">
+                    </div>
+                    <div class="mb-3">
+                        <label for="contact" class="form-label text-light fw-medium">Official Contact Details (Optional)</label>
+                        <input type="text" class="form-control glass-input text-light" id="contact" name="contact"
+                               value="{{ complaint.assigned_officer_contact or '' }}" placeholder="e.g. +91 44 2855 0000 / io.cyber@tnpolice.gov.in">
+                    </div>
+                </div>
+                <div class="modal-glass-footer d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-neon-primary btn-sm px-3">Save Officer Assignment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================================
+     MODAL: UPDATE INVESTIGATION STATUS
+     ========================================================================= -->
+<div class="modal fade" id="updateInvestigationModal" tabindex="-1" aria-labelledby="updateInvestigationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-glass-content">
+            <div class="modal-glass-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-glass-title" id="updateInvestigationModalLabel">
+                    <i class="fa-solid fa-pen-to-square me-2 text-info"></i>Update Investigation Status
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('admin_case_action', complaint_id=complaint.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="action_type" value="update_status">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label for="new_status" class="form-label text-light fw-medium">New Investigation Status</label>
+                        <select class="form-select glass-input text-light" id="new_status" name="new_status" required>
+                            <option value="investigation_in_progress" {% if complaint.status == 'investigation_in_progress' %}selected{% endif %}>Investigation in Progress</option>
+                            <option value="awaiting_further_evidence" {% if complaint.status == 'awaiting_further_evidence' %}selected{% endif %}>Awaiting Further Evidence</option>
+                            <option value="closed" {% if complaint.status == 'closed' %}selected{% endif %}>Closed &amp; Resolved</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status_remarks" class="form-label text-light fw-medium">Investigation Remarks / Audit Notes</label>
+                        <textarea class="form-control glass-input text-light" id="status_remarks" name="status_remarks" rows="3"
+                                  placeholder="Enter progress notes, forensic findings, chargesheet details, or closure justification..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-glass-footer d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-neon-primary btn-sm px-3">Update Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

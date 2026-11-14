@@ -1,0 +1,167 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | My Registered Complaints Dossier{% endblock %}
+{% block meta_description %}
+<meta name="description" content="View and manage citizen-submitted crime complaints, real-time case status, and investigator communications.">
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 1200px; margin: 0 auto;">
+    <!-- Breadcrumb & Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 small text-secondary mb-1">
+                <a href="{{ url_for('home') }}" class="text-secondary text-decoration-none">&larr; Home Dashboard</a>
+                <span>/</span>
+                <span class="text-light">My Complaints</span>
+            </div>
+            <h2 class="fw-bold text-light mb-1"><i class="fa-solid fa-folder-open me-2 text-info"></i>My Crime Complaints &amp; Cases</h2>
+            <p class="text-secondary small mb-0">Track verification status, administrative reviews, and active forensic investigation workspaces.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <form method="POST" action="{{ url_for('new_complaint') }}" class="d-inline m-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn-neon-primary" style="padding: 9px 22px; font-size: 0.88rem; border: none; cursor: pointer;">
+                    <i class="fa-solid fa-file-circle-plus me-1"></i> File New Complaint
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Filter & Search Controls Bar -->
+    <div class="card glass-card p-3 mb-4" style="background: var(--bg-surface-strong); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md);">
+        <form method="GET" action="{{ url_for('my_complaints') }}" class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-transparent border-secondary text-secondary"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="text" name="q" value="{{ query or '' }}" class="form-control glass-input text-light" placeholder="Search by case reference, title, or category...">
+                </div>
+            </div>
+            <div class="col-md-4">
+                <select name="status" class="form-select glass-input text-light" onchange="this.form.submit()">
+                    <option value="" {% if not selected_status %}selected{% endif %}>All Case Statuses ({{ complaints|length }})</option>
+                    <option value="draft" {% if selected_status == 'draft' %}selected{% endif %}>Drafts</option>
+                    <option value="submitted" {% if selected_status == 'submitted' %}selected{% endif %}>Submitted (Awaiting Review)</option>
+                    <option value="under_review" {% if selected_status == 'under_review' %}selected{% endif %}>Under Review</option>
+                    <option value="information_requested" {% if selected_status == 'information_requested' %}selected{% endif %}>Information Requested (Action Required)</option>
+                    <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active Investigations (Approved/Assigned)</option>
+                    <option value="closed" {% if selected_status == 'closed' %}selected{% endif %}>Closed &amp; Resolved</option>
+                    <option value="rejected" {% if selected_status == 'rejected' %}selected{% endif %}>Rejected</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-outline-info w-100">Filter</button>
+                {% if query or selected_status %}
+                    <a href="{{ url_for('my_complaints') }}" class="btn btn-outline-secondary">Reset</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Complaints Records Table -->
+    <div class="card glass-card" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg); overflow: hidden;">
+        <div class="card-body p-0">
+            {% if complaints %}
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover mb-0 align-middle" style="background: transparent;">
+                        <thead>
+                            <tr class="text-secondary small text-uppercase" style="background: rgba(9, 132, 227, 0.08); border-bottom: 1px solid var(--border-glass-subtle);">
+                                <th class="ps-4 py-3">Case Reference</th>
+                                <th class="py-3">Title &amp; Category</th>
+                                <th class="py-3">Incident Date</th>
+                                <th class="py-3">Status</th>
+                                <th class="py-3">Assigned Officer</th>
+                                <th class="text-end pe-4 py-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in complaints %}
+                            <tr style="border-bottom: 1px solid var(--border-glass-subtle);">
+                                <td class="ps-4 py-3">
+                                    <code class="text-info fw-bold fs-6">{{ c.complaint_number }}</code>
+                                    <div class="small text-muted">Facial Ref: {{ c.facial_reference_type|replace('_', ' ')|capitalize }}</div>
+                                </td>
+                                <td class="py-3">
+                                    <div class="fw-semibold text-light">{{ c.title or '(Draft Untitled)' }}</div>
+                                    <span class="badge category-pill-badge">
+                                        {{ c.category or 'Uncategorized' }}
+                                    </span>
+                                </td>
+                                <td class="py-3 small text-secondary">
+                                    {% if c.incident_at %}
+                                        {{ c.incident_at.strftime('%d %b %Y, %H:%M') }}
+                                    {% else %}
+                                        <span class="text-muted">Unspecified</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3">
+                                    {% if c.status == 'draft' %}
+                                        <span class="badge bg-secondary">Draft</span>
+                                    {% elif c.status == 'submitted' %}
+                                        <span class="badge bg-info text-dark">Submitted</span>
+                                    {% elif c.status == 'under_review' %}
+                                        <span class="badge bg-primary">Under Review</span>
+                                    {% elif c.status == 'information_requested' %}
+                                        <span class="badge bg-warning text-dark"><i class="fa-solid fa-triangle-exclamation me-1"></i>Action Required</span>
+                                    {% elif c.status == 'approved' %}
+                                        <span class="badge bg-success">Approved</span>
+                                    {% elif c.status == 'assigned' %}
+                                        <span class="badge bg-info">Officer Assigned</span>
+                                    {% elif c.status == 'investigation_in_progress' %}
+                                        <span class="badge bg-success">Investigation Active</span>
+                                    {% elif c.status == 'awaiting_further_evidence' %}
+                                        <span class="badge bg-warning text-dark">Awaiting Evidence</span>
+                                    {% elif c.status == 'rejected' %}
+                                        <span class="badge bg-danger">Rejected</span>
+                                    {% elif c.status == 'closed' %}
+                                        <span class="badge bg-secondary">Closed</span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 small">
+                                    {% if c.assigned_officer_name %}
+                                        <div class="text-light fw-medium">{{ c.assigned_officer_name }}</div>
+                                        <div class="text-muted" style="font-size: 0.75rem;">{{ c.assigned_station or 'Station not listed' }}</div>
+                                    {% else %}
+                                        <span class="text-muted">Unassigned</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4 py-3">
+                                    {% if c.status == 'draft' %}
+                                        <a href="{{ url_for('edit_complaint', complaint_id=c.id) }}" class="btn btn-sm btn-outline-info">
+                                            Resume Draft &rarr;
+                                        </a>
+                                    {% elif c.status == 'information_requested' %}
+                                        <a href="{{ url_for('respond_information_request', complaint_id=c.id) }}" class="btn btn-sm btn-warning text-dark fw-bold">
+                                            Respond to Request &rarr;
+                                        </a>
+                                    {% elif c.status in ['approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence', 'closed', 'rejected'] %}
+                                        <a href="{{ url_for('case_workspace', complaint_id=c.id) }}" class="btn btn-sm btn-neon-primary" style="padding: 6px 16px; font-size: 0.82rem;">
+                                            Case Workspace &rarr;
+                                        </a>
+                                    {% else %}
+                                        <a href="{{ url_for('case_workspace', complaint_id=c.id) }}" class="btn btn-sm btn-outline-secondary" style="font-size: 0.82rem;">
+                                            Case Status &rarr;
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <div class="fs-1 text-muted mb-2"><i class="fa-solid fa-folder-plus"></i></div>
+                    <div class="fw-semibold text-light mb-1">No Complaints Found</div>
+                    <p class="small text-secondary mb-3">No complaint records match your current filter criteria.</p>
+                    <form method="POST" action="{{ url_for('new_complaint') }}" class="d-inline m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="btn-neon-primary" style="padding: 8px 22px; border: none; cursor: pointer;">
+                            File a New Complaint
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

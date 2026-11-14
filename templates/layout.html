@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ThirdEye — AI Forensic Vision System{% endblock %}</title>
+    {% block meta_description %}
+    <meta name="description" content="ThirdEye: AI-Powered Forensic Facial Sketch Construction, Appearance Exploration, and Law Enforcement Case Management System.">
+    {% endblock %}
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link rel="alternate icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <!-- Ant Design Typography & Modern Font Stack -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- ThirdEye Master Design System -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <!-- Early Theme Initialization to Prevent Flash of Unstyled Content (FOUC) -->
+    <script>
+        (function() {
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                var urlTheme = urlParams.get('theme');
+                if (urlTheme && ['light', 'dark', 'system'].indexOf(urlTheme) !== -1) {
+                    localStorage.setItem('thirdeye_theme_mode', urlTheme);
+                }
+                var storedTheme = localStorage.getItem('thirdeye_theme_mode') || 'system';
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var resolved = storedTheme === 'system' ? (prefersDark ? 'dark' : 'light') : storedTheme;
+                document.documentElement.setAttribute('data-theme', storedTheme);
+                document.documentElement.setAttribute('data-resolved-theme', resolved);
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.setAttribute('data-resolved-theme', 'dark');
+            }
+        })();
+    </script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Mobile Sidebar Backdrop -->
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- Left Navigation Sidebar -->
+        <aside class="app-sidebar" id="appSidebar">
+            <!-- Brand Header (Role-Aware and Accessible) -->
+            <a href="{{ url_for('admin_dashboard') if session.get('role') == 'admin' else url_for('home') }}" class="sidebar-brand" aria-label="ThirdEye Vision Intelligence Home">
+                <div class="brand-icon-box">
+                    <i class="fa-solid fa-eye"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">THIRDEYE</span>
+                    <span class="brand-subtitle">Vision Intelligence</span>
+                </div>
+            </a>
+
+            <!-- Navigation Links or Custom Sidebar Content -->
+            {% block sidebar_nav %}
+            <nav class="sidebar-nav">
+                <span class="nav-section-label">Main Navigation</span>
+
+                <a class="sidebar-link {% if request.endpoint == 'home' %}active{% endif %}" href="{{ url_for('home') }}">
+                    <span class="link-icon"><i class="fa-solid fa-house"></i></span>
+                    <span>Home</span>
+                </a>
+
+                {% if session.get('user_id') %}
+                    {% if session.get('role') == 'user' %}
+                        <span class="nav-section-label">Citizen Services</span>
+                        <form method="POST" action="{{ url_for('new_complaint') }}" class="m-0 p-0">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <button type="submit" class="sidebar-link w-100 text-start {% if request.endpoint in ['new_complaint', 'edit_complaint', 'complaint_confirmation'] %}active{% endif %}" style="background:none; border:none; color:inherit; font:inherit; cursor:pointer;">
+                                <span class="link-icon"><i class="fa-solid fa-file-pen"></i></span>
+                                <span>File Complaint</span>
+                            </button>
+                        </form>
+                        <a class="sidebar-link {% if request.endpoint in ['my_complaints', 'respond_information_request'] %}active{% endif %}" href="{{ url_for('my_complaints') }}">
+                            <span class="link-icon"><i class="fa-solid fa-folder-open"></i></span>
+                            <span>My Complaints</span>
+                        </a>
+                    {% endif %}
+
+                    {% if session.get('role') == 'admin' %}
+                        <span class="nav-section-label">Administration</span>
+                        <a class="sidebar-link {% if request.endpoint in ['admin_dashboard', 'admin_case_review'] %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">
+                            <span class="link-icon"><i class="fa-solid fa-briefcase"></i></span>
+                            <span>Case Management</span>
+                        </a>
+                    {% endif %}
+                {% else %}
+                    <span class="nav-section-label">Access</span>
+                    <a class="sidebar-link {% if request.endpoint == 'login' %}active{% endif %}" href="{{ url_for('login') }}">
+                        <span class="link-icon"><i class="fa-solid fa-lock"></i></span>
+                        <span>Login</span>
+                    </a>
+                    <a class="sidebar-link {% if request.endpoint == 'register' %}active{% endif %}" href="{{ url_for('register') }}">
+                        <span class="link-icon"><i class="fa-solid fa-user-plus"></i></span>
+                        <span>Register</span>
+                    </a>
+                {% endif %}
+            </nav>
+            {% endblock sidebar_nav %}
+
+            <!-- Bottom User Profile Card -->
+            <div class="sidebar-user-area">
+                {% if session.get('user_id') %}
+                    <div class="user-card">
+                        <div class="user-avatar">
+                            {{ (session.get('full_name') or session.get('username'))[0]|upper }}
+                        </div>
+                        <div class="user-info">
+                            <div class="user-name" title="{{ session.get('full_name') or session.get('username') }}">
+                                {{ session.get('full_name') or session.get('username') }}
+                            </div>
+                            <div class="user-role-badge">
+                                {{ session.get('role', 'user')|capitalize }}
+                            </div>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ url_for('logout') }}" class="m-0 p-0 w-100">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <button type="submit" class="btn-sidebar-logout w-100" style="background:none; border:none; text-align:left; cursor:pointer; font:inherit;">
+                            <span class="link-icon me-2"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                            <span>Logout</span>
+                        </button>
+                    </form>
+                {% else %}
+                    <div class="sidebar-auth-btns">
+                        <a href="{{ url_for('login') }}" class="btn-neon-primary text-center w-100" style="padding: 8px 12px; font-size: 0.86rem;">
+                            Login
+                        </a>
+                        <a href="{{ url_for('register') }}" class="btn-neon-secondary text-center w-100" style="padding: 8px 12px; font-size: 0.86rem;">
+                            Register
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </aside>
+
+        <!-- Main Workspace Area -->
+        <main class="app-main">
+            <!-- Contextual Top Header -->
+            <header class="app-header">
+                <div class="header-left">
+                    <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-label="Toggle navigation">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div>
+                        <h1 class="header-page-title">
+                            {% if request.endpoint == 'home' %}
+                                {% if session.get('user_id') %}Workspace Dashboard{% else %}ThirdEye Vision Intelligence{% endif %}
+                            {% elif request.endpoint == 'sketch_constructor' %}
+                                Composite Sketch Constructor
+                            {% elif request.endpoint == 'photo_to_sketch' %}
+                                Photo-to-Sketch Converter
+                            {% elif request.endpoint == 'recognition' %}
+                                Biometric Face Recognition
+                            {% elif request.endpoint == 'create_variations' %}
+                                Facial Appearance Variations
+                            {% elif request.endpoint == 'create_poster' %}
+                                Printable Poster Generator
+                            {% elif request.endpoint == 'construct_face' %}
+                                Facial Reconstruction
+                            {% elif request.endpoint in ['new_complaint', 'edit_complaint'] %}
+                                Crime Complaint Wizard
+                            {% elif request.endpoint == 'my_complaints' %}
+                                My Complaints &amp; Cases
+                            {% elif request.endpoint == 'respond_information_request' %}
+                                Information Request Addendum
+                            {% elif request.endpoint == 'admin_case_review' %}
+                                Case Dossier &amp; Review
+                            {% elif request.endpoint == 'case_workspace' %}
+                                Sequential Forensic Workspace
+                            {% elif request.endpoint == 'complaint_confirmation' %}
+                                Complaint Confirmation
+                            {% elif request.endpoint == 'admin_dashboard' %}
+                                Administrative Control Panel
+                            {% elif request.endpoint == 'login' %}
+                                Secure Account Access
+                            {% elif request.endpoint == 'register' %}
+                                System Registration
+                            {% else %}
+                                ThirdEye Forensic System
+                            {% endif %}
+                        </h1>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <!-- Font Awesome 3-Way Theme Segmented Control (System / Light / Dark) -->
+                    <div class="ant-theme-segmented" id="themeSegmentedControl" role="group" aria-label="Theme Mode Selection">
+                        <button type="button" class="ant-theme-btn" data-theme-mode="system" title="Follow System appearance" aria-label="System Theme">
+                            <span class="theme-icon"><i class="fa-solid fa-desktop"></i></span>
+                            <span class="ant-theme-label">System</span>
+                        </button>
+                        <button type="button" class="ant-theme-btn" data-theme-mode="light" title="Switch to Light background" aria-label="Light Theme">
+                            <span class="theme-icon"><i class="fa-solid fa-sun"></i></span>
+                            <span class="ant-theme-label">Light</span>
+                        </button>
+                        <button type="button" class="ant-theme-btn" data-theme-mode="dark" title="Switch to Dark background" aria-label="Dark Theme">
+                            <span class="theme-icon"><i class="fa-solid fa-moon"></i></span>
+                            <span class="ant-theme-label">Dark</span>
+                        </button>
+                    </div>
+
+                    <div class="header-status-pill">
+                        <span class="status-indicator"></span>
+                        <span>Engine Active</span>
+                    </div>
+                    {% if session.get('user_id') %}
+                        <span class="header-page-badge">
+                            {{ session.get('role', 'user')|upper }}
+                        </span>
+                    {% endif %}
+                </div>
+            </header>
+
+            <!-- Glass Toast Notifications Container -->
+            <div class="toast-container-custom" id="toastContainer">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            {% set toast_type = 'info' %}
+                            {% if category in ['danger', 'error'] %}
+                                {% set toast_type = 'danger' %}
+                            {% elif category == 'success' %}
+                                {% set toast_type = 'success' %}
+                            {% elif category == 'warning' %}
+                                {% set toast_type = 'warning' %}
+                            {% endif %}
+                            <div class="glass-toast toast-{{ toast_type }}" role="alert">
+                                <div class="toast-icon">
+                                    {% if toast_type == 'success' %}
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    {% elif toast_type in ['danger', 'error'] %}
+                                        <i class="fa-solid fa-circle-xmark"></i>
+                                    {% elif toast_type == 'warning' %}
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                    {% else %}
+                                        <i class="fa-solid fa-circle-info"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="toast-content">{{ message }}</div>
+                                <button type="button" class="toast-close-btn" onclick="dismissToast(this.closest('.glass-toast'))" aria-label="Close">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+
+            <!-- Page Content Body -->
+            <div class="app-content-body">
+                {% if error_message %}
+                <div class="container py-4">
+                    <div class="glass-card text-center p-5 mx-auto" style="max-width: 600px; border: 1px solid rgba(255, 75, 75, 0.3);">
+                        <div class="display-4 text-danger mb-3">
+                            <i class="fa-solid fa-triangle-exclamation" style="font-size: 3rem;"></i>
+                        </div>
+                        <h3 class="text-light mb-2">{{ error_title or 'Security Validation Error' }}</h3>
+                        <p class="text-secondary mb-4">{{ error_message }}</p>
+                        <a href="{{ url_for('home') }}" class="btn-neon-primary px-4 py-2">Return to Safety</a>
+                    </div>
+                </div>
+                {% endif %}
+                {% block content %}{% endblock %}
+            </div>
+
+            <!-- Footer with Dynamic Copyright & Accessible Links -->
+            <footer class="app-footer">
+                <div class="container-fluid d-flex flex-wrap justify-content-between align-items-center py-2 gap-2">
+                    <p class="mb-0 text-muted small">&copy; {{ current_year or 2026 }} ThirdEye. All Rights Reserved. Computer Vision &amp; Biometric Systems.</p>
+                    <div class="footer-links d-flex gap-3 small">
+                        <a href="{{ url_for('home') }}" class="text-secondary text-decoration-none">Home</a>
+                        {% if session.get('user_id') %}
+                            {% if session.get('role') == 'user' %}
+                                <a href="{{ url_for('my_complaints') }}" class="text-secondary text-decoration-none">My Cases</a>
+                            {% elif session.get('role') == 'admin' %}
+                                <a href="{{ url_for('admin_dashboard') }}" class="text-secondary text-decoration-none">Dossier</a>
+                            {% endif %}
+                        {% else %}
+                            <a href="{{ url_for('login') }}" class="text-secondary text-decoration-none">Officer Access</a>
+                            <a href="{{ url_for('register') }}" class="text-secondary text-decoration-none">Citizen Portal</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/theme-manager.js') }}"></script>
+    <script>
+        window.CSRF_TOKEN = "{{ csrf_token() }}";
+        document.addEventListener('DOMContentLoaded', function() {
+            // Enhanced Mobile navigation drawer toggle & dismiss handlers
+            const mobileToggle = document.getElementById('mobileNavToggle');
+            const sidebar = document.getElementById('appSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+
+            function openMobileSidebar() {
+                if (sidebar) sidebar.classList.add('sidebar-open');
+                if (backdrop) backdrop.classList.add('active');
+                if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'true');
+            }
+
+            function closeMobileSidebar() {
+                if (sidebar) sidebar.classList.remove('sidebar-open');
+                if (backdrop) backdrop.classList.remove('active');
+                if (mobileToggle) mobileToggle.setAttribute('aria-expanded', 'false');
+            }
+
+            if (mobileToggle && sidebar && backdrop) {
+                mobileToggle.addEventListener('click', function() {
+                    const isOpen = sidebar.classList.contains('sidebar-open');
+                    if (isOpen) {
+                        closeMobileSidebar();
+                    } else {
+                        openMobileSidebar();
+                    }
+                });
+                backdrop.addEventListener('click', closeMobileSidebar);
+
+                // Close drawer when pressing Escape
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape' && sidebar.classList.contains('sidebar-open')) {
+                        closeMobileSidebar();
+                    }
+                });
+
+                // Close drawer when clicking any navigation link inside sidebar on mobile
+                const sidebarLinks = sidebar.querySelectorAll('.sidebar-link');
+                sidebarLinks.forEach(function(link) {
+                    link.addEventListener('click', function() {
+                        if (window.innerWidth < 992) {
+                            closeMobileSidebar();
+                        }
+                    });
+                });
+            }
+
+            // Auto-dismiss glass toasts after 5 seconds
+            const toasts = document.querySelectorAll('.glass-toast');
+            toasts.forEach(function(toast) {
+                setTimeout(function() {
+                    dismissToast(toast);
+                }, 5000);
+            });
+        });
+
+        function dismissToast(el) {
+            if (!el) return;
+            el.classList.add('toast-hide');
+            setTimeout(function() {
+                if (el.parentNode) {
+                    el.parentNode.removeChild(el);
+                }
+            }, 300);
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

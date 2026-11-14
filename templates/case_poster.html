@@ -1,0 +1,581 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Case Wanted Poster Generator{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Generate and publish official police wanted bulletin for this case.">
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 1480px;">
+
+    <!-- Top Breadcrumb & Case Meta Bar -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3" style="border-bottom: 1px solid var(--border-glass);">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1" style="font-size: 0.85rem;">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard' if session.get('role') == 'admin' else 'home') }}" class="text-decoration-none" style="color: var(--accent-secondary);">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('case_workspace', complaint_id=complaint.id) }}" class="text-decoration-none" style="color: var(--accent-secondary);">Case #{{ complaint.complaint_number }}</a></li>
+                    <li class="breadcrumb-item active text-light" aria-current="page">Case Poster Constructor</li>
+                </ol>
+            </nav>
+            <h2 class="fw-bold mb-0 text-light" style="letter-spacing: -0.5px;">
+                <span style="color: var(--accent-primary);">&#128203;</span> Forensic Case Poster Constructor
+            </h2>
+            <p class="small mb-0" style="color: var(--text-secondary);">
+                Select poster imagery, customize headings, choose visible case details, and generate an official vector A4 public notice draft.
+            </p>
+        </div>
+        <div class="d-flex gap-2 align-items-center mt-3 mt-md-0">
+            <span class="badge" style="background: rgba(67, 183, 167, 0.15); border: 1px solid var(--accent-secondary); color: var(--accent-secondary); padding: 7px 14px; font-size: 0.85rem;">
+                Case #{{ complaint.complaint_number }}
+            </span>
+            <a href="{{ url_for('case_workspace', complaint_id=complaint.id) }}" class="btn btn-sm btn-outline-secondary px-3" style="border-color: var(--border-glass); color: var(--text-secondary);">
+                &larr; Back to Workspace
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Workspace Form -->
+    <form id="posterConstructorForm" method="POST" action="{{ url_for('case_poster', complaint_id=complaint.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+        <div class="row g-4">
+            <!-- ============================================================ -->
+            <!-- LEFT COLUMN: CUSTOMIZATION CONTROLS                          -->
+            <!-- ============================================================ -->
+            <div class="col-lg-6 col-xl-6">
+
+                <!-- 1. IMAGE SELECTION PANEL -->
+                <div class="card p-4 mb-4" style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <h5 class="fw-bold mb-0 text-light" style="letter-spacing: -0.3px;">
+                            <span style="color: var(--accent-primary);">&#128444;&#65039;</span> 1. Select Poster Image
+                        </h5>
+                        <span class="badge" style="background: rgba(184, 227, 106, 0.12); color: var(--accent-primary); font-size: 0.75rem; border: 1px solid rgba(184, 227, 106, 0.25);">
+                            Explicit Choice Required
+                        </span>
+                    </div>
+                    <p class="small text-secondary mb-3">
+                        Choose which visual representation should be prominently featured on the public identification poster:
+                    </p>
+
+                    <div class="row g-3" id="imageSelectionCards">
+                        <!-- Option A: Original Sketch / Authentic Photo -->
+                        {% if base_info %}
+                        <div class="{% if variation_info %}col-sm-6{% else %}col-12{% endif %}">
+                            <label class="image-select-card p-3 rounded w-100 h-100 d-flex flex-column justify-content-between {% if default_selected == 'sketch' %}active{% endif %}" id="sketchCardOption" style="cursor: pointer; border: 2px solid {% if default_selected == 'sketch' %}var(--accent-secondary){% else %}var(--border-glass){% endif %}; background: rgba(23, 36, 45, 0.7); transition: all 0.2s ease;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge" style="background: rgba(105, 199, 139, 0.15); color: var(--success); font-size: 0.72rem; border: 1px solid rgba(105, 199, 139, 0.3);">
+                                        Option 1
+                                    </span>
+                                    <input type="radio" name="selected_image_choice" value="sketch" {% if default_selected == 'sketch' %}checked{% endif %} class="form-check-input" onchange="handleImageChoiceChange('sketch')">
+                                </div>
+                                <div class="text-center my-2 p-2 rounded" style="background: rgba(12, 18, 24, 0.9); border: 1px solid rgba(255,255,255,0.04);">
+                                    <img src="{{ base_info.url }}" alt="Base Reference" class="img-fluid rounded" style="max-height: 160px; object-fit: contain;">
+                                </div>
+                                <div class="mt-2 text-center">
+                                    <div class="small fw-bold text-light">{{ base_info.label }}</div>
+                                    <div class="small text-muted" style="font-size: 0.72rem;">Original reference without modifications</div>
+                                </div>
+                            </label>
+                        </div>
+                        {% endif %}
+
+                        <!-- Option B: Single Custom Variation (Only if variation exists) -->
+                        {% if variation_info %}
+                        <div class="col-sm-6">
+                            <label class="image-select-card p-3 rounded w-100 h-100 d-flex flex-column justify-content-between {% if default_selected == 'variation' %}active{% endif %}" id="variationCardOption" style="cursor: pointer; border: 2px solid {% if default_selected == 'variation' %}var(--accent-secondary){% else %}var(--border-glass){% endif %}; background: rgba(23, 36, 45, 0.7); transition: all 0.2s ease;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge" style="background: rgba(184, 227, 106, 0.2); color: var(--accent-primary); font-size: 0.72rem; border: 1px solid var(--accent-primary);">
+                                        Option 2
+                                    </span>
+                                    <input type="radio" name="selected_image_choice" value="variation" {% if default_selected == 'variation' %}checked{% endif %} class="form-check-input" onchange="handleImageChoiceChange('variation')">
+                                </div>
+                                <div class="text-center my-2 p-2 rounded" style="background: rgba(12, 18, 24, 0.9); border: 1px solid rgba(255,255,255,0.04);">
+                                    <img src="{{ variation_info.url }}" alt="Custom Variation" class="img-fluid rounded" style="max-height: 160px; object-fit: contain;">
+                                </div>
+                                <div class="mt-2 text-center">
+                                    <div class="small fw-bold text-light">AI Appearance Variation</div>
+                                    <div class="small text-muted" style="font-size: 0.72rem;">Single customized projection with disclosure</div>
+                                </div>
+                            </label>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 2. POSTER HEADING & SUBJECT IDENTITY -->
+                <div class="card p-4 mb-4" style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <h5 class="fw-bold mb-0 text-light" style="letter-spacing: -0.3px;">
+                            <span style="color: var(--accent-primary);">&#128394;</span> 2. Poster Heading &amp; Notice Title
+                        </h5>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                            Heading Preset (Neutral Legal Language)
+                        </label>
+                        <select class="form-select form-select-sm" id="headingPresetSelect" onchange="applyHeadingPreset(this.value)" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                            <option value="SUSPECT IDENTIFICATION NOTICE" selected>SUSPECT IDENTIFICATION NOTICE (Standard)</option>
+                            <option value="PERSON OF INTEREST">PERSON OF INTEREST (Neutral Enquiry)</option>
+                            <option value="UNIDENTIFIED PERSON">UNIDENTIFIED PERSON (Forensic Notice)</option>
+                            <option value="POLICE FORENSIC IDENTIFICATION NOTICE">POLICE FORENSIC IDENTIFICATION NOTICE</option>
+                            <option value="MISSING PERSON BULLETIN">MISSING PERSON BULLETIN</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                            Custom Heading Text
+                        </label>
+                        <input type="text" name="custom_title" id="customTitleInput" class="form-control" value="{{ case_fields.custom_title }}" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                            Subject Identifier / Name Banner
+                        </label>
+                        <input type="text" name="full_name" id="fullNameInput" class="form-control" value="{{ case_fields.full_name }}" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                    </div>
+                </div>
+
+                <!-- 3. PHYSICAL ATTRIBUTES VISIBILITY CONTROLS -->
+                <div class="card p-4 mb-4" style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <h5 class="fw-bold mb-0 text-light" style="letter-spacing: -0.3px;">
+                            <span style="color: var(--accent-primary);">&#9745;</span> 3. Select Visible Physical Attributes
+                        </h5>
+                        <span class="badge" style="background: rgba(255,255,255,0.06); color: var(--text-secondary); font-size: 0.75rem;">
+                            No Unwanted Placeholders
+                        </span>
+                    </div>
+                    <p class="small text-secondary mb-3">
+                        Choose which physical attributes to display in the quick badges row. Unchecked or empty fields are completely omitted from the final poster without showing "Unknown".
+                    </p>
+
+                    <!-- Attributes List with Checkboxes & Inputs -->
+                    <div class="row g-3" id="attributeTogglesList">
+
+                        <!-- Age -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_age">Age</label>
+                                    <input class="form-check-input" type="checkbox" name="show_age" id="show_age" value="1" {% if case_fields.age %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="age_val" id="age_val" class="form-control form-control-sm" value="{{ case_fields.age }}" placeholder="e.g. 28 yrs" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.age %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.age %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gender -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_gender">Gender</label>
+                                    <input class="form-check-input" type="checkbox" name="show_gender" id="show_gender" value="1" {% if case_fields.gender %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="gender_val" id="gender_val" class="form-control form-control-sm" value="{{ case_fields.gender }}" placeholder="e.g. Male" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.gender %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.gender %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Height -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_height">Height</label>
+                                    <input class="form-check-input" type="checkbox" name="show_height" id="show_height" value="1" {% if case_fields.height %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="height_val" id="height_val" class="form-control form-control-sm" value="{{ case_fields.height }}" placeholder="e.g. 5 ft 10 in" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.height %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.height %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Build -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_build">Build</label>
+                                    <input class="form-check-input" type="checkbox" name="show_build" id="show_build" value="1" {% if case_fields.build %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="build_val" id="build_val" class="form-control form-control-sm" value="{{ case_fields.build }}" placeholder="e.g. Medium Athletic" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.build %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.build %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Complexion -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_complexion">Complexion</label>
+                                    <input class="form-check-input" type="checkbox" name="show_complexion" id="show_complexion" value="1" {% if case_fields.complexion %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="complexion_val" id="complexion_val" class="form-control form-control-sm" value="{{ case_fields.complexion }}" placeholder="e.g. Medium / Olive" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.complexion %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.complexion %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hair -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_hair">Hair</label>
+                                    <input class="form-check-input" type="checkbox" name="show_hair" id="show_hair" value="1" {% if case_fields.hair %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="hair_val" id="hair_val" class="form-control form-control-sm" value="{{ case_fields.hair }}" placeholder="e.g. Short Dark Brown" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.hair %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.hair %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Eyes -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_eyes">Eyes</label>
+                                    <input class="form-check-input" type="checkbox" name="show_eyes" id="show_eyes" value="1" {% if case_fields.eyes %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="eyes_val" id="eyes_val" class="form-control form-control-sm" value="{{ case_fields.eyes }}" placeholder="e.g. Dark Brown" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.eyes %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.eyes %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Last Known Location -->
+                        <div class="col-md-6">
+                            <div class="p-2 rounded" style="background: rgba(23, 36, 45, 0.5); border: 1px solid var(--border-glass);">
+                                <div class="form-check form-switch mb-1 d-flex justify-content-between align-items-center">
+                                    <label class="form-check-label small fw-bold text-light" for="show_location">Last Known Location</label>
+                                    <input class="form-check-input" type="checkbox" name="show_location" id="show_location" value="1" {% if case_fields.location %}checked{% endif %} onchange="updateLivePreview()">
+                                </div>
+                                <input type="text" name="location_val" id="location_val" class="form-control form-control-sm" value="{{ case_fields.location }}" placeholder="e.g. Sector 4 Market" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                                <div class="small mt-1" style="font-size: 0.7rem; color: {% if case_fields.location %}var(--success){% else %}var(--text-muted){% endif %};">
+                                    {% if case_fields.location %}&#10004; Available in Case Dossier{% else %}&#9675; Not recorded in case record{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 4. DESCRIPTION & DETAILS SECTION -->
+                <div class="card p-4 mb-4" style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <h5 class="fw-bold mb-0 text-light" style="letter-spacing: -0.3px;">
+                            <span style="color: var(--accent-primary);">&#128221;</span> 4. Description &amp; Identifying Details
+                        </h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="show_description" id="show_description" value="1" checked onchange="updateLivePreview()">
+                            <label class="form-check-label small text-secondary" for="show_description">Include in Poster</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                            Identifying Marks / Scars
+                        </label>
+                        <input type="text" name="identifying_marks_val" id="identifying_marks_val" class="form-control form-control-sm mb-2" value="{{ case_fields.identifying_marks }}" placeholder="e.g. Scar over left eyebrow, eagle tattoo on right forearm" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                    </div>
+
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                            Physical Narrative / Case Circumstances
+                        </label>
+                        <textarea name="description" id="descriptionInput" rows="3" class="form-control" placeholder="Provide factual physical description and incident details..." oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff; font-size: 0.88rem;">{{ case_fields.description }}</textarea>
+                    </div>
+                </div>
+
+                <!-- 5. CONTACT AGENCY & HELPLINE -->
+                <div class="card p-4 mb-4" style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-2" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+                        <h5 class="fw-bold mb-0 text-light" style="letter-spacing: -0.3px;">
+                            <span style="color: var(--accent-primary);">&#128222;</span> 5. Law Enforcement Contact Box
+                        </h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="show_contact" id="show_contact" value="1" checked onchange="updateLivePreview()">
+                            <label class="form-check-label small text-secondary" for="show_contact">Include Contact Box</label>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                                Police Station / Division
+                            </label>
+                            <input type="text" name="police_station" id="policeStationInput" class="form-control form-control-sm" value="{{ case_fields.police_station }}" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                                Investigating Officer / Liaison
+                            </label>
+                            <input type="text" name="contact_person" id="contactPersonInput" class="form-control form-control-sm" value="{{ case_fields.contact_person }}" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-uppercase" style="color: var(--text-secondary); letter-spacing: 0.8px;">
+                                Official Helpline / Emergency Phone
+                            </label>
+                            <input type="text" name="phone" id="phoneInput" class="form-control form-control-sm" value="{{ case_fields.phone }}" oninput="updateLivePreview()" style="background: rgba(15, 23, 29, 0.8); border: 1px solid var(--border-glass); color: #fff;">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- RIGHT COLUMN: REAL-TIME LIVE A4 PREVIEW & ACTION BAR         -->
+            <!-- ============================================================ -->
+            <div class="col-lg-6 col-xl-6">
+                <div class="sticky-top" style="top: 20px; z-index: 10;">
+
+                    <!-- Action Bar -->
+                    <div class="card p-3 mb-3 d-flex flex-row justify-content-between align-items-center" style="background: var(--bg-card); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                        <div>
+                            <span class="small fw-bold text-light">&#128065; Live A4 Poster Preview</span>
+                            <div class="small text-muted" style="font-size: 0.75rem;">Matches final ReportLab PDF rendering</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" id="generatePosterBtn" class="btn btn-sm fw-bold px-4 py-2" style="background: var(--accent-primary); color: #101820; border: none; letter-spacing: 0.5px;">
+                                Generate Official Poster Draft &rarr;
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Live A4 Poster Preview Paper Frame -->
+                    <div class="poster-preview-paper shadow-lg rounded" id="livePosterPreviewPaper" style="background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; width: 100%; max-width: 580px; margin: 0 auto; aspect-ratio: 1 / 1.414; padding: 22px 20px; display: flex; flex-direction: column; justify-content: space-between; position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; box-sizing: border-box;">
+
+                        <!-- 1. Header Banner -->
+                        <div>
+                            <div class="text-center py-2 px-3 rounded" style="background: #0f172a; color: #ffffff;">
+                                <div class="fw-bold" id="previewTitle" style="font-size: 1.15rem; letter-spacing: 1px; line-height: 1.2;">
+                                    {{ case_fields.custom_title|upper }}
+                                </div>
+                                <div class="text-uppercase" style="font-size: 0.65rem; color: #94a3b8; font-weight: 700; letter-spacing: 0.8px; margin-top: 3px;">
+                                    CASE REF: {{ case_fields.case_number }} &bull; DATE: {{ case_fields.date_incident }}
+                                </div>
+                            </div>
+
+                            <!-- 2. Center Subject Image -->
+                            <div class="text-center my-2 position-relative" style="background: #f8fafc; border: 2px solid #0f172a; border-radius: 4px; overflow: hidden; height: 215px; display: flex; align-items: center; justify-content: center;">
+                                <img src="{% if default_selected == 'variation' and variation_info %}{{ variation_info.url }}{% elif base_info %}{{ base_info.url }}{% endif %}" id="previewSubjectImg" alt="Poster Subject" style="max-height: 100%; max-width: 100%; object-fit: contain;">
+                                <div class="position-absolute bottom-0 start-0 end-0 py-1 text-center" id="previewImgLabelBanner" style="background: rgba(15, 23, 42, 0.92); color: #ffffff; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.8px;">
+                                    {% if default_selected == 'variation' and variation_info %}AI-GENERATED APPEARANCE VARIATION{% elif base_info %}{{ base_info.label }}{% endif %}
+                                </div>
+                            </div>
+
+                            <!-- 3. Name Banner -->
+                            <div class="text-center my-1">
+                                <div class="fw-bold text-uppercase" id="previewName" style="font-size: 1.05rem; letter-spacing: 0.5px; color: #0f172a;">
+                                    {{ case_fields.full_name }}
+                                </div>
+                            </div>
+
+                            <!-- 4. Dynamic Physical Attributes Row -->
+                            <div id="previewAttributesContainer" class="my-2 p-1 rounded" style="background: #f8fafc; border: 1px solid #cbd5e1; display: flex;">
+                                <!-- Badges injected via JS -->
+                            </div>
+
+                            <!-- 5. Description Box -->
+                            <div id="previewDescriptionBox" class="p-2 my-2 rounded" style="background: #ffffff; border: 1px solid #cbd5e1; font-size: 0.72rem; line-height: 1.35;">
+                                <div class="fw-bold text-uppercase mb-1" style="color: #0284c7; font-size: 0.65rem; letter-spacing: 0.5px;">
+                                    Physical Description &amp; Identifying Information:
+                                </div>
+                                <div id="previewDescriptionText" style="color: #1e293b;">
+                                    {{ case_fields.description or 'No additional physical details provided.' }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 6. Bottom Contact Box & Disclaimer -->
+                        <div>
+                            <div id="previewContactBox" class="p-2 mb-2 rounded text-center" style="background: #0f172a; color: #ffffff; border: 1.5px solid #0284c7;">
+                                <div class="fw-bold text-uppercase" style="color: #38bdf8; font-size: 0.65rem; letter-spacing: 0.5px;">
+                                    If you have any information, please contact immediately:
+                                </div>
+                                <div class="fw-bold my-1" id="previewPhone" style="font-size: 1.05rem; letter-spacing: 1px; color: #ffffff;">
+                                    {{ case_fields.phone }}
+                                </div>
+                                <div class="d-flex justify-content-center gap-3" style="font-size: 0.65rem; color: #cbd5e1;">
+                                    <span id="previewAgency">{{ case_fields.police_station }}</span>
+                                    <span>&bull;</span>
+                                    <span id="previewOfficer">{{ case_fields.contact_person }}</span>
+                                </div>
+                            </div>
+
+                            <!-- 7. Context Legal Disclaimer Footer -->
+                            <div id="previewDisclaimerBox" class="p-1 rounded text-center" style="background: #f1f5f9; border: 1px solid #cbd5e1; font-size: 0.6rem; color: #475569;">
+                                <span class="fw-bold" id="previewDisclaimerTag">FORENSIC COMPOSITE SKETCH:</span>
+                                <span class="fst-italic" id="previewDisclaimerBody">Prepared by authorized investigating authorities based on witness testimony and forensic estimation.</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+    .image-select-card.active {
+        border-color: var(--accent-secondary) !important;
+        background: rgba(67, 183, 167, 0.16) !important;
+    }
+    .image-select-card:hover {
+        border-color: rgba(67, 183, 167, 0.5) !important;
+    }
+    .poster-preview-paper {
+        user-select: none;
+    }
+</style>
+
+<script>
+    const baseInfo = {{ (base_info or {}) | tojson }};
+    const varInfo = {{ (variation_info or {}) | tojson }};
+    let currentImageChoice = '{{ default_selected }}';
+
+    function handleImageChoiceChange(choice) {
+        currentImageChoice = choice;
+        document.querySelectorAll('.image-select-card').forEach(c => c.classList.remove('active'));
+        if (choice === 'variation') {
+            const card = document.getElementById('variationCardOption');
+            if (card) card.classList.add('active');
+        } else {
+            const card = document.getElementById('sketchCardOption');
+            if (card) card.classList.add('active');
+        }
+        updateLivePreview();
+    }
+
+    function applyHeadingPreset(preset) {
+        document.getElementById('customTitleInput').value = preset;
+        updateLivePreview();
+    }
+
+    function updateLivePreview() {
+        // 1. Heading & Name
+        const titleVal = document.getElementById('customTitleInput').value.trim() || 'SUSPECT IDENTIFICATION NOTICE';
+        document.getElementById('previewTitle').textContent = titleVal.toUpperCase();
+
+        const nameVal = document.getElementById('fullNameInput').value.trim() || 'UNIDENTIFIED SUBJECT';
+        document.getElementById('previewName').textContent = nameVal.toUpperCase();
+
+        // 2. Image Selection & Disclaimer
+        const previewImg = document.getElementById('previewSubjectImg');
+        const labelBanner = document.getElementById('previewImgLabelBanner');
+        const discTag = document.getElementById('previewDisclaimerTag');
+        const discBody = document.getElementById('previewDisclaimerBody');
+
+        if (currentImageChoice === 'variation' && varInfo && varInfo.url) {
+            previewImg.src = varInfo.url;
+            labelBanner.textContent = 'AI-GENERATED APPEARANCE VARIATION';
+            discTag.textContent = 'AI-GENERATED ILLUSTRATIVE APPEARANCE:';
+            discBody.textContent = 'AI-generated illustrative appearance. Not a verified photograph or confirmed identity.';
+        } else if (baseInfo && baseInfo.url) {
+            previewImg.src = baseInfo.url;
+            labelBanner.textContent = baseInfo.label || 'FORENSIC REFERENCE';
+            if (baseInfo.source_type === 'real_photo') {
+                discTag.textContent = 'OFFICIAL POLICE NOTICE:';
+                discBody.textContent = 'Published for official investigative purposes only. All information is subject to official verification.';
+            } else {
+                discTag.textContent = 'FORENSIC COMPOSITE SKETCH:';
+                discBody.textContent = 'Prepared by authorized investigating authorities based on witness testimony and forensic estimation.';
+            }
+        }
+
+        // 3. Dynamic Attributes Grid
+        const attrDefinitions = [
+            { check: 'show_age', val: 'age_val', label: 'AGE' },
+            { check: 'show_gender', val: 'gender_val', label: 'GENDER' },
+            { check: 'show_height', val: 'height_val', label: 'HEIGHT' },
+            { check: 'show_build', val: 'build_val', label: 'BUILD' },
+            { check: 'show_complexion', val: 'complexion_val', label: 'COMPLEXION' },
+            { check: 'show_hair', val: 'hair_val', label: 'HAIR' },
+            { check: 'show_eyes', val: 'eyes_val', label: 'EYES' },
+            { check: 'show_location', val: 'location_val', label: 'LAST LOCATION' }
+        ];
+
+        const activeAttrs = [];
+        attrDefinitions.forEach(item => {
+            const checkEl = document.getElementById(item.check);
+            const valEl = document.getElementById(item.val);
+            if (checkEl && checkEl.checked && valEl) {
+                const text = valEl.value.trim();
+                if (text && text.toLowerCase() !== 'unknown' && text.toLowerCase() !== 'none' && text.toLowerCase() !== 'null') {
+                    activeAttrs.push({ label: item.label, value: text });
+                }
+            }
+        });
+
+        const attrContainer = document.getElementById('previewAttributesContainer');
+        attrContainer.innerHTML = '';
+
+        if (activeAttrs.length > 0) {
+            attrContainer.style.display = 'flex';
+            const colWidth = (100 / activeAttrs.length).toFixed(1) + '%';
+            activeAttrs.forEach((a, idx) => {
+                const cell = document.createElement('div');
+                cell.style.width = colWidth;
+                cell.style.textAlign = 'center';
+                cell.style.padding = '2px 4px';
+                if (idx > 0) {
+                    cell.style.borderLeft = '1px solid #e2e8f0';
+                }
+                cell.innerHTML = `
+                    <div style="font-size: 0.58rem; font-weight: 700; color: #64748b; letter-spacing: 0.5px;">${a.label}</div>
+                    <div style="font-size: 0.74rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.value}</div>
+                `;
+                attrContainer.appendChild(cell);
+            });
+        } else {
+            attrContainer.style.display = 'none';
+        }
+
+        // 4. Description Box
+        const showDesc = document.getElementById('show_description').checked;
+        const descBox = document.getElementById('previewDescriptionBox');
+        let descText = document.getElementById('descriptionInput').value.trim();
+        const marksVal = document.getElementById('identifying_marks_val').value.trim();
+        if (marksVal && marksVal.toLowerCase() !== 'unknown') {
+            descText = `Identifying Marks: ${marksVal}. ` + descText;
+        }
+
+        if (showDesc && descText) {
+            descBox.style.display = 'block';
+            document.getElementById('previewDescriptionText').textContent = descText;
+        } else {
+            descBox.style.display = 'none';
+        }
+
+        // 5. Contact Box
+        const showContact = document.getElementById('show_contact').checked;
+        const contactBox = document.getElementById('previewContactBox');
+        if (showContact) {
+            contactBox.style.display = 'block';
+            document.getElementById('previewPhone').textContent = document.getElementById('phoneInput').value.trim() || '+91 100 / +91 112';
+            document.getElementById('previewAgency').textContent = document.getElementById('policeStationInput').value.trim() || 'ThirdEye Investigation Division';
+            document.getElementById('previewOfficer').textContent = document.getElementById('contactPersonInput').value.trim() || 'Investigating Authority';
+        } else {
+            contactBox.style.display = 'none';
+        }
+    }
+
+    // Initialize live preview on load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateLivePreview();
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Submit Addendum Information{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Provide clarifying responses and additional evidence requested by the assigned case investigator.">
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 900px; margin: 0 auto;">
+    <!-- Breadcrumb -->
+    <div class="mb-4">
+        <a href="{{ url_for('my_complaints') }}" class="text-secondary text-decoration-none small">&larr; Back to My Complaints</a>
+        <h2 class="fw-bold text-light mt-2 mb-1"><i class="fa-solid fa-bullhorn me-2 text-info"></i>Respond to Information Request</h2>
+        <div class="d-flex align-items-center gap-2">
+            <span class="small text-secondary">Case Reference:</span>
+            <code class="text-info fw-bold">{{ complaint.complaint_number }}</code>
+            <span class="badge bg-warning text-dark small ms-2">Action Required</span>
+        </div>
+    </div>
+
+    <!-- Official Information Request Card -->
+    <div class="card glass-card mb-4" style="background: rgba(253, 203, 110, 0.08); border: 1px solid rgba(253, 203, 110, 0.3); border-radius: var(--border-radius-md);">
+        <div class="card-header d-flex justify-content-between align-items-center p-3 px-4" style="background: rgba(253, 203, 110, 0.12); border-bottom: 1px solid rgba(253, 203, 110, 0.2);">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fs-5 text-warning"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <span class="fw-bold text-light">Official Police Information Request</span>
+            </div>
+            {% set req_info = info_request if (info_request is defined and info_request) else last_info_request %}
+            {% if req_info %}
+                <span class="small text-muted">{{ req_info.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+            {% endif %}
+        </div>
+        <div class="card-body p-4">
+            <div class="text-light" style="font-size: 1.02rem; line-height: 1.6;">
+                {{ req_info.message if req_info else 'The investigating officer requested further details regarding this incident.' }}
+            </div>
+            <div class="small text-muted mt-3 pt-2 border-top border-secondary">
+                Requested by: {{ req_info.actor.full_name or req_info.actor.username if req_info and req_info.actor else 'Investigating Officer / Admin' }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Immutability Guarantee Notice -->
+    <div class="alert alert-dark border-secondary p-3 mb-4 small" style="background: var(--bg-surface); border-radius: var(--border-radius-md);">
+        <div class="d-flex align-items-start gap-2">
+            <span class="fs-5 text-info"><i class="fa-solid fa-shield-halved"></i></span>
+            <div>
+                <strong class="text-light">Forensic Immutability Guarantee:</strong>
+                <div class="text-secondary mt-1">
+                    Your original submitted complaint narrative, incident coordinates, and attached evidence files remain completely immutable and locked. Your response below will be permanently recorded as an <strong>audited supplementary addendum</strong> and submitted directly to the reviewing authorities.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response / Addendum Form -->
+    <div class="card glass-card p-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+        <form method="POST" action="{{ url_for('respond_information_request', complaint_id=complaint.id) }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="mb-3">
+                <label for="addendum_text" class="form-label fw-bold text-light">
+                    Clarification / Additional Narrative Details <span class="text-danger">*</span>
+                </label>
+                <textarea class="form-control glass-input text-light" id="addendum_text" name="addendum_text" rows="6" required
+                          placeholder="Provide the requested information, clarification on sequence of events, suspect appearance, or location details..."></textarea>
+                <div class="small text-muted mt-1">Be as specific and clear as possible. This statement will be appended to the case audit timeline.</div>
+            </div>
+
+            <!-- Optional Supplementary Evidence Upload -->
+            <div class="mb-4 p-3" style="background: rgba(15, 20, 25, 0.45); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md);">
+                <label for="supplementary_files" class="form-label fw-bold text-light mb-1">
+                    <i class="fa-solid fa-paperclip me-2 text-info"></i>Supplementary Evidence Files (Optional)
+                </label>
+                <p class="small text-secondary mb-2">
+                    Attach additional photographs, CCTV clips, documents (PDF), or audio notes. Max 5 files (10 MB photos/docs, 15 MB audio).
+                </p>
+                <input class="form-control glass-input" type="file" id="supplementary_files" name="supplementary_files" multiple
+                       accept=".jpg,.jpeg,.png,.webp,.pdf,.mp3,.wav,.ogg,.webm">
+                <div class="small text-muted mt-1">Supplementary files are encrypted and hashed independently as new case artifacts.</div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center pt-2">
+                <a href="{{ url_for('my_complaints') }}" class="btn btn-outline-secondary">
+                    Cancel &amp; Return
+                </a>
+                <button type="submit" class="btn-neon-primary" style="padding: 10px 28px;">
+                    Submit Audited Addendum &rarr;
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,351 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Biometric Face Recognition & Suspect Search{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Automated forensic facial recognition search comparing composite sketches against suspect databases.">
+{% endblock %}
+{% block content %}
+<style>
+    .recognition-body {
+        background: transparent;
+        color: var(--text-primary);
+        padding: 2rem 1.5rem;
+        min-height: calc(100vh - var(--header-height) - 60px);
+    }
+
+    .page-title {
+        font-weight: 700;
+        font-size: 2rem;
+        color: var(--text-bright);
+        margin-bottom: 6px;
+    }
+    .page-description {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin-bottom: 25px;
+    }
+
+    .action-container {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--border-radius-lg);
+        padding: 28px 24px;
+        box-shadow: var(--glass-shadow-sm);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .metadata-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border-glass-subtle);
+        font-size: 0.85rem;
+    }
+    .metadata-label {
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+    .metadata-value {
+        color: var(--text-bright);
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .results-title {
+        text-align: center;
+        margin-top: 40px;
+        margin-bottom: 25px;
+        font-weight: 700;
+        font-size: 1.8rem;
+        color: var(--text-bright);
+    }
+
+    .match-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-glass);
+        border-radius: var(--border-radius-lg);
+        overflow: hidden;
+        transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: var(--glass-shadow-sm);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .match-card:hover {
+        transform: translateY(-5px);
+        border-color: var(--accent-secondary);
+        box-shadow: var(--glass-shadow), var(--shadow-glow-cyan);
+    }
+    .match-card-img {
+        width: 100%;
+        height: 240px;
+        object-fit: cover;
+        border-bottom: 1px solid var(--border-glass-subtle);
+    }
+    .match-card .card-body {
+        padding: 18px;
+        flex-grow: 1;
+    }
+    .match-card .card-title {
+        font-weight: 700;
+        color: var(--text-bright);
+        font-size: 1.15rem;
+        margin-bottom: 8px;
+    }
+    .match-card .card-text {
+        color: var(--text-secondary);
+        font-size: 0.88rem;
+        line-height: 1.45;
+    }
+    .match-card .card-footer {
+        background: rgba(15, 20, 25, 0.7);
+        border-top: 1px solid var(--border-glass-subtle);
+        padding: 12px 18px;
+        font-size: 0.95rem;
+    }
+    .similarity-pill {
+        display: inline-block;
+        padding: 4px 14px;
+        border-radius: var(--border-radius-pill);
+        background: var(--gradient-subtle);
+        border: 1px solid var(--border-glass);
+        color: var(--accent-secondary);
+        font-weight: 700;
+        font-size: 0.88rem;
+    }
+</style>
+
+<div class="recognition-body">
+    <div class="container-fluid" style="max-width: 1200px; margin: 0 auto;">
+        <!-- Breadcrumb Navigation -->
+        {% if complaint %}
+        <div class="mb-3">
+            <a href="{{ url_for('case_workspace', complaint_id=complaint.id) }}" class="text-secondary text-decoration-none small">
+                &larr; Back to Case Workspace: <code>{{ complaint.complaint_number }}</code>
+            </a>
+        </div>
+        {% endif %}
+
+        <!-- Header -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-2">
+            <div>
+                <h1 class="page-title">
+                    <i class="fa-solid fa-fingerprint me-2 text-info"></i>Biometric Face Recognition: {% if complaint %}<code>{{ complaint.complaint_number }}</code>{% else %}Forensic Engine{% endif %}
+                </h1>
+                <p class="page-description">
+                    Branch B Case-Bound Recognition &bull; Analyzes verified authentic photographic evidence against enrolled database records.
+                </p>
+            </div>
+            {% if complaint %}
+            <span class="badge" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid var(--border-glass); padding: 8px 14px; font-size: 0.85rem;">
+                Branch B: Authentic Photograph Workflow
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Forensic Uncertainty Advisory & Mandatory Human Review -->
+        <div class="alert alert-dark border-warning p-3 mb-4 d-flex align-items-center gap-3" style="background: rgba(253, 203, 110, 0.08); border-radius: var(--border-radius-md);">
+            <span class="fs-3 text-warning"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div>
+                <strong class="text-warning">Forensic Biometric Advisory &amp; Mandatory Human Review:</strong>
+                <p class="small text-secondary mb-0">
+                    Biometric similarity percentages represent algorithmic Euclidean distance rankings against enrolled records. A candidate match is an <strong>investigative lead only</strong> and must NEVER be interpreted as conclusive proof of identity or legal guilt. Qualified human forensic examination and independent physical corroboration are mandatory.
+                </p>
+            </div>
+        </div>
+
+        <!-- Main Operational Workspace (Case-Linked Evidence Binding) -->
+        <div class="row g-4 align-items-stretch">
+            <!-- Left Container: Verified Case Evidence Source (Zero arbitrary file uploads) -->
+            <div class="col-lg-6">
+                <div class="action-container">
+                    <div>
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fs-5 text-info"><i class="fa-solid fa-camera"></i></span>
+                                <h5 class="fw-bold text-light mb-0">Verified Case Photographic Evidence</h5>
+                            </div>
+                            <span class="badge bg-success" style="font-size: 0.72rem;">Authentic Evidence Record</span>
+                        </div>
+
+                        {% if selected_evidence %}
+                            <!-- Image Display Streamed Directly from Case Storage -->
+                            <div class="text-center p-3 mb-3" style="background: rgba(10, 15, 20, 0.7); border-radius: var(--border-radius-md); border: 1px solid var(--border-glass-subtle);">
+                                <img src="{{ url_for('view_complaint_evidence', complaint_id=complaint.id, evidence_id=selected_evidence.id) }}"
+                                     alt="Verified Case Photographic Evidence"
+                                     style="max-height: 220px; max-width: 100%; object-fit: contain; border-radius: 6px;">
+                            </div>
+
+                            <!-- Case Evidence Metadata Table -->
+                            <div class="mb-3">
+                                <div class="metadata-row">
+                                    <span class="metadata-label">Artifact Filename</span>
+                                    <span class="metadata-value text-truncate" style="max-width: 250px;">{{ selected_evidence.original_filename or 'Photograph' }}</span>
+                                </div>
+                                <div class="metadata-row">
+                                    <span class="metadata-label">Evidence Record ID</span>
+                                    <span class="metadata-value">#{{ selected_evidence.id }}</span>
+                                </div>
+                                <div class="metadata-row">
+                                    <span class="metadata-label">File Size &bull; MIME Type</span>
+                                    <span class="metadata-value">{{ ((selected_evidence.file_size_bytes or 0) / 1024)|round(1) }} KB &bull; {{ selected_evidence.mime_type }}</span>
+                                </div>
+                                <div class="metadata-row">
+                                    <span class="metadata-label">Evidence Source Kind</span>
+                                    <span class="metadata-value"><span class="badge bg-primary" style="font-size: 0.7rem;">{{ selected_evidence.source_kind|upper }}</span></span>
+                                </div>
+                                <div class="metadata-row">
+                                    <span class="metadata-label">Uploaded Timestamp</span>
+                                    <span class="metadata-value">{{ selected_evidence.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                                </div>
+                                <div class="metadata-row">
+                                    <span class="metadata-label">Cryptographic SHA-256</span>
+                                    <span class="metadata-value font-monospace text-info small" style="font-size: 0.75rem;">{{ selected_evidence.sha256_hex[:24] if selected_evidence.sha256_hex else 'N/A' }}...</span>
+                                </div>
+                            </div>
+
+                            <!-- Selection Among Multiple Photos (If case contains > 1 eligible photo) -->
+                            {% if eligible_photos and eligible_photos|length > 1 %}
+                                <form method="GET" class="mb-3">
+                                    <label class="form-label small text-secondary mb-1">Switch Eligible Case Photograph:</label>
+                                    <select name="evidence_id" class="form-select form-select-sm" onchange="this.form.submit()" style="background: var(--bg-input); color: #fff; border: 1px solid var(--border-glass);">
+                                        {% for p in eligible_photos %}
+                                            <option value="{{ p.id }}" {% if p.id == selected_evidence.id %}selected{% endif %}>
+                                                #{{ p.id }} - {{ p.original_filename }} ({{ ((p.file_size_bytes or 0)/1024)|round(1) }} KB)
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-danger">
+                                No eligible authentic photographic evidence linked to this case.
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Action Trigger (Server-Bound Execution Form) -->
+                    {% if selected_evidence %}
+                        <form method="POST" action="{{ url_for('case_recognition', complaint_id=complaint.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <input type="hidden" name="evidence_id" value="{{ selected_evidence.id }}">
+                            <div class="d-grid mt-2">
+                                <button type="submit" class="btn-neon-primary w-100 py-3">
+                                    <i class="fa-solid fa-magnifying-glass me-2"></i>Execute Biometric Search Against Person Database
+                                </button>
+                            </div>
+                            <div class="small text-muted text-center mt-2" style="font-size: 0.73rem;">
+                                <i class="fa-solid fa-lock me-1"></i> Bound strictly to verified case artifact #{{ selected_evidence.id }}. Arbitrary file uploads disabled.
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right Container: Biometric Engine Status & Intelligence Overview -->
+            <div class="col-lg-6">
+                <div class="action-container">
+                    <div>
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fs-5 text-info"><i class="fa-solid fa-database"></i></span>
+                                <h5 class="fw-bold text-light mb-0">Biometric Match Intelligence</h5>
+                            </div>
+                            {% if scan_executed %}
+                                {% if scan_error %}
+                                    <span class="badge bg-warning text-dark">No Face Detected</span>
+                                {% elif results %}
+                                    <span class="badge bg-success">{{ results|length }} Matches Identified</span>
+                                {% else %}
+                                    <span class="badge bg-info text-dark">No Candidate &gt; 50%</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">Awaiting Scan</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Status Message Panels -->
+                        {% if not scan_executed %}
+                            <div class="text-center py-5">
+                                <div class="fs-1 text-info mb-3"><i class="fa-solid fa-shield-halved"></i></div>
+                                <h5 class="text-light fw-bold">Ready for Biometric Search</h5>
+                                <p class="small text-secondary px-3 mb-0" style="max-width: 420px; margin: 0 auto;">
+                                    Click <strong>"Execute Biometric Search"</strong> to extract 128-dimensional facial embeddings from the verified case photograph and compute Euclidean distance rankings against all enrolled criminal records.
+                                </p>
+                            </div>
+                        {% else %}
+                            {% if scan_error %}
+                                <div class="p-4 rounded mb-3" style="background: rgba(253, 203, 110, 0.08); border: 1px solid rgba(253, 203, 110, 0.4);">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <span class="fs-3 text-warning"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                        <div>
+                                            <h6 class="text-warning fw-bold mb-1">Face Detection Limitation</h6>
+                                            <p class="small text-secondary mb-0">
+                                                {{ scan_error }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% elif results %}
+                                <div class="p-3 rounded mb-3" style="background: rgba(0, 206, 201, 0.08); border: 1px solid rgba(0, 206, 201, 0.3);">
+                                    <div class="d-flex align-items-center gap-2 text-info fw-bold mb-1">
+                                        <i class="fa-solid fa-circle-check me-2"></i> Candidate Record Matches Found
+                                    </div>
+                                    <p class="small text-secondary mb-0">
+                                        The biometric engine identified <strong>{{ results|length }} candidate record(s)</strong> exceeding the 50% confidence threshold. Detailed investigative leads are listed below.
+                                    </p>
+                                </div>
+                            {% else %}
+                                <div class="p-3 rounded mb-3 text-center" style="background: rgba(9, 132, 227, 0.08); border: 1px solid rgba(9, 132, 227, 0.3);">
+                                    <div class="text-info fw-bold mb-1"><i class="fa-solid fa-circle-info me-2"></i>No Enrolled Records Matched</div>
+                                    <p class="small text-secondary mb-0">
+                                        Facial embeddings were successfully extracted, but no record in the database exceeded the 50% similarity threshold.
+                                    </p>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+
+                    <!-- Enrolled Database Reference Notice -->
+                    <div class="p-3 rounded" style="background: rgba(15, 20, 25, 0.5); border: 1px solid var(--border-glass-subtle);">
+                        <div class="small text-secondary">
+                            <strong>Gallery Baseline:</strong> Enrolled database records from <code>Person</code> model. Matching uses dlib/ResNet-34 128-d encodings with Euclidean metric conversion.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Candidate Matches Results Cards (If Results Available) -->
+        {% if results %}
+            <h2 class="results-title">Ranked Candidate Matches (Investigative Leads)</h2>
+            <div class="row g-4">
+                {% for result in results %}
+                <div class="col-md-4">
+                    <div class="match-card">
+                        <img src="{{ url_for('uploaded_file', filename=result.person.image_path) }}" class="match-card-img" alt="{{ result.person.name }}">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ result.person.name }}</h5>
+                            <p class="card-text"><strong>Details:</strong> {{ result.person.person_details }}</p>
+                        </div>
+                        <div class="card-footer d-flex justify-content-between align-items-center">
+                            <span class="small text-muted">ID: #{{ result.person.id }}</span>
+                            <span class="similarity-pill">Similarity: {{ result.similarity }}%</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

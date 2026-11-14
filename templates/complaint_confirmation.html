@@ -1,0 +1,227 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Complaint Submitted Successfully{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Official confirmation and tracking details for citizen crime complaint submission.">
+{% endblock %}
+{% block extra_head %}
+<style>
+.confirmation-container {
+    max-width: 800px;
+    margin: 3rem auto;
+    padding: 0 1.5rem;
+}
+
+.confirmation-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--border-radius-lg);
+    padding: 3rem 2.5rem;
+    box-shadow: var(--glass-shadow);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.confirmation-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-primary);
+}
+
+.success-badge-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(0, 206, 201, 0.15);
+    border: 2px solid var(--accent-secondary);
+    color: var(--accent-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    margin: 0 auto 1.5rem auto;
+    box-shadow: var(--shadow-glow-cyan);
+}
+
+.confirmation-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 0.5rem;
+}
+
+.confirmation-subtitle {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+}
+
+.ref-number-box {
+    background: var(--bg-surface-strong);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 2rem;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.ref-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.ref-code {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--accent-secondary);
+    letter-spacing: 2px;
+    font-family: monospace;
+}
+
+.info-summary-table {
+    text-align: left;
+    background: rgba(15, 20, 25, 0.55);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.88rem;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row-label {
+    color: var(--text-muted);
+}
+
+.info-row-val {
+    color: var(--text-bright);
+    font-weight: 500;
+}
+
+.next-steps-card {
+    text-align: left;
+    background: rgba(9, 132, 227, 0.08);
+    border: 1px solid rgba(9, 132, 227, 0.25);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2.25rem;
+    font-size: 0.86rem;
+    color: var(--text-secondary);
+}
+
+.next-steps-card h5 {
+    color: var(--accent-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="confirmation-container">
+    <div class="confirmation-card">
+        <div class="success-badge-icon"><i class="fa-solid fa-check"></i></div>
+        
+        <h2 class="confirmation-title">Complaint Registered Successfully</h2>
+        <p class="confirmation-subtitle">
+            Your incident report has been securely cataloged and registered in the ThirdEye forensic intake registry.
+        </p>
+
+        <!-- Complaint Reference Box -->
+        <div class="ref-number-box">
+            <span class="ref-label">Official Case Reference Number</span>
+            <span class="ref-code" id="complaintRefCode">{{ complaint.complaint_number }}</span>
+            <button type="button" class="btn btn-sm btn-outline-info mt-1" onclick="copyRefCode()" style="font-size: 0.75rem;">
+                <i class="fa-solid fa-copy me-1"></i> Copy Reference
+            </button>
+        </div>
+
+        <!-- Case Metadata Summary -->
+        <div class="info-summary-table">
+            <div class="info-row">
+                <span class="info-row-label">Complaint Title</span>
+                <span class="info-row-val">{{ complaint.title }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">Category</span>
+                <span class="info-row-val">{{ complaint.category }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">Submission Timestamp</span>
+                <span class="info-row-val">{{ complaint.updated_at.strftime('%Y-%m-%d %H:%M:%S UTC') if complaint.updated_at else 'Recorded' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">Current Intake Status</span>
+                <span class="info-row-val text-info text-uppercase fw-semibold">{{ complaint.status }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-row-label">Attached Evidence Files</span>
+                <span class="info-row-val">{{ complaint.evidence.count() }} file(s) in private storage</span>
+            </div>
+        </div>
+
+        <!-- Next Steps Notice -->
+        <div class="next-steps-card">
+            <h5><i class="fa-solid fa-circle-info me-2 text-info"></i>Next Steps & Intake Notice</h5>
+            <p class="mb-2">
+                Your incident details and uploaded private evidence are stored in isolated case storage under reference <code>{{ complaint.complaint_number }}</code>.
+            </p>
+            <p class="mb-0 text-muted small">
+                <strong>Intake Note:</strong> Case submission registers the complaint for intake processing. Officer assignment and administrative review are processed in subsequent operational phases. Keep your reference number safe for future tracking.
+            </p>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{{ url_for('home') }}" class="btn-neon-primary" style="padding: 10px 28px;">
+                <i class="fa-solid fa-house me-1"></i> Return to Workspace Home
+            </a>
+            <form method="POST" action="{{ url_for('new_complaint') }}" class="d-inline m-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn-neon-secondary" style="padding: 10px 24px;">
+                    <i class="fa-solid fa-file-pen me-1"></i> File Another Complaint
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyRefCode() {
+    const code = document.getElementById('complaintRefCode').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+        alert(`Copied complaint reference ${code} to clipboard.`);
+    }).catch(() => {
+        prompt("Copy complaint reference:", code);
+    });
+}
+</script>
+{% endblock %}

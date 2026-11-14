@@ -1,0 +1,202 @@
+{
+  "total": 39,
+  "passed": 39,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Server Connectivity (GET /home)",
+      "passed": true,
+      "message": "HTTP 200"
+    },
+    {
+      "name": "CSRF Token Present on Public Landing",
+      "passed": true,
+      "message": "Token: IjAxMDAwOTMxNjZ..."
+    },
+    {
+      "name": "Font Awesome 6 Icon Integration",
+      "passed": true,
+      "message": "Font Awesome assets active in DOM"
+    },
+    {
+      "name": "3-Way Theme Segmented Control (System/Light/Dark)",
+      "passed": true,
+      "message": "Theme manager component verified"
+    },
+    {
+      "name": "Citizen Registration (POST /register)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Duplicate Username Rejection",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Citizen Authentication (POST /login)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "RBAC Citizen Restriction (/admin/dashboard)",
+      "passed": true,
+      "message": "Status 302"
+    },
+    {
+      "name": "Admin Authentication (POST /login)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Admin Dashboard Access (/admin/dashboard)",
+      "passed": true,
+      "message": "HTTP 200"
+    },
+    {
+      "name": "Initialize Complaint Draft (POST /complaints/new)",
+      "passed": true,
+      "message": "Complaint ID: 35"
+    },
+    {
+      "name": "Save Draft Step 1 (Incident & Physical Details)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Save Draft Step 2 (Branch A 'none' Selection)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Step 3 Evidence Attachment & SHA-256 Hashing",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Submit Complaint (POST /complaints/<id>/submit)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Admin Case Review View (/admin/cases/<id>/review)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Admin Case Approval (POST /admin/cases/<id>/action)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Description JSON API Endpoint",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Gender Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Age Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Height Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Build Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Complexion Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Hair Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Suspect Marks Match",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Render Sketch Constructor (/cases/<id>/sketch)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Sidebar Suspect Details Present in HTML",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Save Composite Sketch Artifact",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "AI Face Reconstruction Execution",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Facial Variations Generation Execution",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Biometric Policy Block on Branch A",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Wanted Poster Generation (ReportLab PDF/PNG)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Poster Evidence Registered in Database",
+      "passed": true,
+      "message": "Evidence ID: 17"
+    },
+    {
+      "name": "Poster Public Download Gated Before Approval",
+      "passed": true,
+      "message": "HTTP 403"
+    },
+    {
+      "name": "Admin Approves Poster Notice",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Poster Public Download Allowed After Approval",
+      "passed": true,
+      "message": "Bytes received: 18119"
+    },
+    {
+      "name": "Branch C Biometric Prohibition (Masked Face Block)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Citizen Logout (POST /logout)",
+      "passed": true,
+      "message": ""
+    },
+    {
+      "name": "Session Terminated After Logout",
+      "passed": true,
+      "message": "Status 302"
+    }
+  ]
+}

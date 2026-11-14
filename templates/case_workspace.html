@@ -1,0 +1,401 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | Forensic Case Workspace & Workflow{% endblock %}
+{% block meta_description %}
+<meta name="description" content="Sequential 4-phase forensic suite: composite sketch creation, appearance variations, wanted poster generation, and biometric match.">
+{% endblock %}
+{% block content %}
+<div class="container-fluid py-4" style="max-width: 1200px; margin: 0 auto;">
+    <!-- Case Workspace Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 small text-secondary mb-1">
+                {% if session.get('role') == 'admin' %}
+                    <a href="{{ url_for('admin_case_review', complaint_id=complaint.id) }}" class="text-secondary text-decoration-none">&larr; Back to Case Dossier</a>
+                {% else %}
+                    <a href="{{ url_for('my_complaints') }}" class="text-secondary text-decoration-none">&larr; Back to My Complaints</a>
+                {% endif %}
+                <span>/</span>
+                <span class="text-light">Sequential Forensic Workspace</span>
+            </div>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <h2 class="fw-bold text-light mb-0"><i class="fa-solid fa-briefcase me-2 text-info"></i>Case Workspace: <code>{{ complaint.complaint_number }}</code></h2>
+                {% if complaint.status == 'approved' %}
+                    <span class="badge bg-success">Approved Case</span>
+                {% elif complaint.status == 'assigned' %}
+                    <span class="badge bg-info">Assigned</span>
+                {% elif complaint.status == 'investigation_in_progress' %}
+                    <span class="badge bg-success">Investigation Active</span>
+                {% elif complaint.status == 'awaiting_further_evidence' %}
+                    <span class="badge bg-warning text-dark">Awaiting Evidence</span>
+                {% elif complaint.status == 'closed' %}
+                    <span class="badge bg-secondary">Closed Case</span>
+                {% else %}
+                    <span class="badge bg-primary">{{ complaint.status|replace('_', ' ')|capitalize }}</span>
+                {% endif %}
+
+                <!-- Branch Badge -->
+                {% if complaint.facial_reference_type == 'none' %}
+                    <span class="badge" style="background: rgba(9, 132, 227, 0.15); color: var(--accent-primary); border: 1px solid var(--border-glass);">
+                        Branch A: Composite Sketch Workflow
+                    </span>
+                {% elif complaint.facial_reference_type == 'photo_normal' %}
+                    <span class="badge" style="background: rgba(0, 206, 201, 0.15); color: var(--accent-secondary); border: 1px solid var(--border-glass);">
+                        Branch B: Authentic Photograph Workflow
+                    </span>
+                {% endif %}
+            </div>
+            <div class="text-secondary small mt-1">
+                <strong>{{ complaint.title or 'Untitled Incident' }}</strong> &bull; {{ complaint.category or 'Uncategorized' }}
+                {% if complaint.assigned_officer_name %}
+                    &bull; Investigating Officer: <span class="text-light fw-medium">{{ complaint.assigned_officer_name }}</span> ({{ complaint.assigned_station or 'Unit' }})
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            {% if session.get('role') == 'admin' %}
+                <a href="{{ url_for('admin_case_review', complaint_id=complaint.id) }}" class="btn btn-outline-info btn-sm">
+                    Administrative Dossier
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Case Status State Warnings (If under review or closed) -->
+    {% if complaint.status in ['submitted', 'under_review'] %}
+        <div class="alert alert-dark border-info p-3 mb-4 d-flex align-items-center gap-3" style="background: rgba(9, 132, 227, 0.08); border-radius: var(--border-radius-md);">
+            <span class="fs-3 text-info"><i class="fa-solid fa-eye"></i></span>
+            <div>
+                <strong class="text-light">Administrative Intake Review in Progress</strong>
+                <p class="small text-secondary mb-0">
+                    This complaint is currently undergoing official verification by police authorities. Operational forensic modules will be unlocked once approved by an administrator.
+                </p>
+            </div>
+        </div>
+    {% elif complaint.status == 'information_requested' %}
+        <div class="alert alert-dark border-warning p-3 mb-4 d-flex justify-content-between align-items-center gap-3" style="background: rgba(253, 203, 110, 0.08); border-radius: var(--border-radius-md);">
+            <div class="d-flex align-items-center gap-3">
+                <span class="fs-3 text-warning"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <div>
+                    <strong class="text-light">Information Request Pending</strong>
+                    <p class="small text-secondary mb-0">The investigating authority has requested additional information or evidence.</p>
+                </div>
+            </div>
+            {% if session.get('user_id') == complaint.created_by_id %}
+                <a href="{{ url_for('respond_information_request', complaint_id=complaint.id) }}" class="btn btn-warning text-dark fw-bold btn-sm">
+                    Submit Response Addendum &rarr;
+                </a>
+            {% endif %}
+        </div>
+    {% elif complaint.status == 'rejected' %}
+        <div class="alert alert-dark border-danger p-3 mb-4 d-flex align-items-center gap-3" style="background: rgba(214, 48, 49, 0.08); border-radius: var(--border-radius-md);">
+            <span class="fs-3 text-danger"><i class="fa-solid fa-xmark"></i></span>
+            <div>
+                <strong class="text-light">Complaint Rejected</strong>
+                <p class="small text-secondary mb-0">This complaint file was reviewed and rejected. No further forensic investigation is authorized.</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- =====================================================================
+         SEQUENTIAL FORENSIC WORKFLOW PANELS (BRANCH SPECIFIC)
+         ===================================================================== -->
+    {% if complaint.status in ['approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence', 'closed'] %}
+        <div class="card glass-card p-4 mb-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+            <div class="d-flex justify-content-between align-items-center pb-3 mb-4 border-bottom border-secondary">
+                <div>
+                    <h4 class="fw-bold text-light mb-0">&#9878;&#65039; Sequential Case Investigation Workflow</h4>
+                    <span class="small text-secondary">Follow the step-by-step pipeline authorized for this evidence branch.</span>
+                </div>
+                <span class="badge bg-secondary font-monospace" style="font-size: 0.78rem;">Pipeline Enforced</span>
+            </div>
+
+            <!-- BRANCH A: COMPOSITE SKETCH WORKFLOW -->
+            {% if complaint.facial_reference_type == 'none' %}
+                <div class="row g-4">
+                    <!-- Stage A.1: Composite Sketch -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid {% if has_sketch %}var(--accent-secondary){% else %}var(--border-glass-subtle){% endif %}; border-radius: var(--border-radius-md);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge {% if has_sketch %}bg-success{% else %}bg-primary{% endif %}" style="font-size: 0.72rem;">Stage 1</span>
+                                {% if has_sketch %}<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Completed</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-pen-nib me-2 text-info"></i>Composite Sketch</h6>
+                            <p class="small text-secondary mb-3" style="font-size: 0.8rem; line-height: 1.5;">
+                                Construct witness sketch using modular facial components.
+                            </p>
+                            <a href="{{ url_for('case_sketch', complaint_id=complaint.id) }}" class="btn btn-sm btn-outline-info w-100">
+                                {% if has_sketch %}Re-open Constructor{% else %}Launch Constructor &rarr;{% endif %}
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Stage A.2: Sketch-to-Face Reconstruction -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid {% if has_reconstruction %}var(--accent-secondary){% elif has_sketch %}var(--border-glass){% else %}rgba(255,255,255,0.05){% endif %}; border-radius: var(--border-radius-md); {% if not has_sketch %}opacity: 0.55;{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge {% if has_reconstruction %}bg-success{% elif has_sketch %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="font-size: 0.72rem;">Stage 2</span>
+                                {% if has_reconstruction %}<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Completed</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-wand-magic-sparkles me-2 text-info"></i>Facial Reconstruction</h6>
+                            <p class="small text-secondary mb-2" style="font-size: 0.8rem; line-height: 1.5;">
+                                AI CycleGAN synthesis from sketch.
+                            </p>
+                            <div class="badge bg-dark text-warning p-1 mb-2 text-wrap text-start" style="font-size: 0.68rem; line-height: 1.3;">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>Illustrative AI reconstruction; not actual photo.
+                            </div>
+                            {% if has_sketch %}
+                                <form method="POST" action="{{ url_for('case_reconstruct', complaint_id=complaint.id) }}" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-neon-primary w-100">
+                                        {% if has_reconstruction %}View / Rerun Reconstruction{% else %}Reconstruct Face &rarr;{% endif %}
+                                    </button>
+                                </form>
+                            {% else %}
+                                <button type="button" class="btn btn-sm btn-secondary w-100" disabled>Requires Stage 1</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Stage A.3: Face Variations -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid {% if has_variation %}var(--accent-secondary){% elif has_reconstruction or has_sketch %}var(--border-glass){% else %}rgba(255,255,255,0.05){% endif %}; border-radius: var(--border-radius-md); {% if not (has_reconstruction or has_sketch) %}opacity: 0.55;{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge {% if has_variation %}bg-success{% elif has_reconstruction or has_sketch %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="font-size: 0.72rem;">Stage 3</span>
+                                {% if has_variation %}<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Generated</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-masks-theater me-2 text-info"></i>Appearance Variations</h6>
+                            <p class="small text-secondary mb-3" style="font-size: 0.8rem; line-height: 1.5;">
+                                Demographic &amp; age-progression variations.
+                            </p>
+                            {% if has_reconstruction or has_sketch %}
+                                <form method="POST" action="{{ url_for('case_variations', complaint_id=complaint.id) }}" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-info w-100">
+                                        Generate Variations &rarr;
+                                    </button>
+                                </form>
+                            {% else %}
+                                <button type="button" class="btn btn-sm btn-secondary w-100" disabled>Requires Face</button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Stage A.4: Poster Draft & Distribution -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid {% if has_approved_poster %}var(--success){% elif has_poster %}var(--warning){% elif has_reconstruction or has_sketch %}var(--border-glass){% else %}rgba(255,255,255,0.05){% endif %}; border-radius: var(--border-radius-md); {% if not (has_reconstruction or has_sketch) %}opacity: 0.55;{% endif %}">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge {% if has_approved_poster %}bg-success{% elif has_poster %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size: 0.72rem;">Stage 4</span>
+                                {% if has_approved_poster %}<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Approved Notice</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-bullhorn me-2 text-info"></i>Case Poster</h6>
+                            <p class="small text-secondary mb-3" style="font-size: 0.8rem; line-height: 1.5;">
+                                A4 Public Notice Draft (Admin approval required).
+                            </p>
+                            {% if has_reconstruction or has_sketch %}
+                                <form method="POST" action="{{ url_for('case_poster', complaint_id=complaint.id) }}" class="m-0">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-info w-100">
+                                        Design Case Poster &rarr;
+                                    </button>
+                                </form>
+                            {% else %}
+                                <button type="button" class="btn btn-sm btn-secondary w-100" disabled>Requires Image</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+            <!-- BRANCH B: AUTHENTIC PHOTOGRAPH WORKFLOW -->
+            {% elif complaint.facial_reference_type == 'photo_normal' %}
+                <div class="row g-4">
+                    <!-- Stage B.1: Authentic Photo Preserved -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid var(--accent-secondary); border-radius: var(--border-radius-md);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-success" style="font-size: 0.72rem;">Stage 1</span>
+                                <span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Authentic Photo</span>
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-image me-2 text-info"></i>Reference Photo</h6>
+                            <p class="small text-secondary mb-2" style="font-size: 0.8rem; line-height: 1.5;">
+                                Authentic suspect reference preserved in evidence.
+                            </p>
+                            <div class="badge bg-dark text-info p-1 mb-2 text-wrap text-start" style="font-size: 0.68rem; line-height: 1.3;">
+                                <i class="fa-solid fa-circle-info me-1"></i>Sketch &amp; Reconstruction bypassed.
+                            </div>
+                            <span class="btn btn-sm btn-outline-success w-100 disabled">Ground Truth Verified</span>
+                        </div>
+                    </div>
+
+                    <!-- Stage B.2: Face Variations from Photo -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-info text-dark" style="font-size: 0.72rem;">Stage 2</span>
+                                {% if has_variation %}<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Generated</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-masks-theater me-2 text-info"></i>Appearance Variations</h6>
+                            <p class="small text-secondary mb-3" style="font-size: 0.8rem; line-height: 1.5;">
+                                Age &amp; disguise variations from authentic photo.
+                            </p>
+                            <form method="POST" action="{{ url_for('case_variations', complaint_id=complaint.id) }}" class="m-0">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-sm btn-outline-info w-100">
+                                    Explore Variations &rarr;
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Stage B.3: Controlled Face Recognition -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid var(--border-glass); border-radius: var(--border-radius-md);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-info text-dark" style="font-size: 0.72rem;">Stage 3</span>
+                                <span class="badge bg-dark text-info" style="font-size: 0.68rem;">Controlled</span>
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-fingerprint me-2 text-info"></i>Biometric Recognition</h6>
+                            <p class="small text-secondary mb-2" style="font-size: 0.8rem; line-height: 1.5;">
+                                1:N match against enrolled database.
+                            </p>
+                            <div class="badge bg-dark text-info p-1 mb-2 text-wrap text-start" style="font-size: 0.68rem; line-height: 1.3;">
+                                <i class="fa-solid fa-lock me-1"></i>Strictly on authentic photograph only.
+                            </div>
+                            <a href="{{ url_for('case_recognition', complaint_id=complaint.id) }}" class="btn btn-sm btn-outline-info w-100">
+                                Scan Enrolled Records &rarr;
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Stage B.4: Case Poster Creation -->
+                    <div class="col-md-6 col-lg-3">
+                        <div class="workflow-stage-card p-3 h-100" style="background: rgba(15, 20, 25, 0.6); border: 1px solid {% if has_approved_poster %}var(--success){% elif has_poster %}var(--warning){% else %}var(--border-glass){% endif %}; border-radius: var(--border-radius-md);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge {% if has_approved_poster %}bg-success{% elif has_poster %}bg-warning text-dark{% else %}bg-secondary{% endif %}" style="font-size: 0.72rem;">Stage 4</span>
+                                {% if has_approved_poster %}<span class="text-success small fw-bold"><i class="fa-solid fa-check me-1"></i>Approved Notice</span>{% endif %}
+                            </div>
+                            <h6 class="fw-bold text-light mb-1"><i class="fa-solid fa-bullhorn me-2 text-info"></i>Case Poster</h6>
+                            <p class="small text-secondary mb-3" style="font-size: 0.8rem; line-height: 1.5;">
+                                A4 Bulletin with authentic photo &amp; case details.
+                            </p>
+                            <form method="POST" action="{{ url_for('case_poster', complaint_id=complaint.id) }}" class="m-0">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-sm btn-outline-info w-100">
+                                    Design Case Poster &rarr;
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <!-- =====================================================================
+         CASE ARTIFACTS & EVIDENCE REPOSITORY
+         ===================================================================== -->
+    <div class="card glass-card p-4 mb-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+        <div class="d-flex justify-content-between align-items-center pb-3 mb-3 border-bottom border-secondary">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fs-5 text-info"><i class="fa-solid fa-paperclip"></i></span>
+                <h5 class="fw-bold text-light mb-0">Case Evidence &amp; Derived Forensic Artifacts</h5>
+            </div>
+            <span class="badge bg-secondary font-monospace">{{ evidence_list|length }} total artifacts</span>
+        </div>
+
+        {% if evidence_list %}
+            <div class="row g-3">
+                {% for ev in evidence_list %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="p-3" style="background: rgba(15, 20, 25, 0.5); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md); height: 100%;">
+                        <div class="d-flex align-items-start justify-content-between mb-2">
+                            <span class="badge {% if ev.source_kind == 'uploaded' %}bg-primary{% else %}bg-info text-dark{% endif %}" style="font-size: 0.7rem;">
+                                {{ ev.source_kind|upper }}
+                            </span>
+                            <span class="badge bg-dark text-secondary" style="font-size: 0.68rem;">
+                                {{ ev.evidence_type }}
+                            </span>
+                        </div>
+                        <div class="fw-semibold text-light text-truncate mb-1" title="{{ ev.original_filename }}">{{ ev.original_filename or 'Artifact' }}</div>
+                        <div class="small text-secondary mb-2" style="font-size: 0.78rem;">
+                            {{ ((ev.file_size_bytes or 0) / 1024)|round(1) }} KB &bull; Access: {{ ev.access_level }}
+                        </div>
+
+                        <!-- Disclaimers on derived items -->
+                        {% if ev.evidence_type == 'reconstructed_face' %}
+                            <div class="badge bg-dark text-warning p-1 mb-2 text-wrap text-start" style="font-size: 0.66rem; line-height: 1.2;">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>AI-Generated Reconstruction (CycleGAN)
+                            </div>
+                        {% elif ev.evidence_type == 'variation' %}
+                            <div class="badge bg-dark text-info p-1 mb-2 text-wrap text-start" style="font-size: 0.66rem; line-height: 1.2;">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>Algorithmic Appearance Variation
+                            </div>
+                        {% elif ev.evidence_type == 'poster' %}
+                            {% if ev.access_level == 'public_notice' %}
+                                <div class="badge bg-success text-white p-1 mb-2 text-wrap text-start" style="font-size: 0.66rem; line-height: 1.2;">
+                                    <i class="fa-solid fa-check me-1"></i>Admin Approved for Public Notice Distribution
+                                </div>
+                            {% else %}
+                                <div class="badge bg-warning text-dark p-1 mb-2 text-wrap text-start" style="font-size: 0.66rem; line-height: 1.2;">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Internal Draft Notice (Pending Admin Approval)
+                                </div>
+                            {% endif %}
+                        {% endif %}
+
+                        <div class="d-flex align-items-center justify-content-between mt-3 pt-2 border-top border-secondary">
+                            <a href="{{ url_for('view_complaint_evidence', complaint_id=complaint.id, evidence_id=ev.id) }}" target="_blank" class="btn btn-sm btn-outline-info" style="font-size: 0.78rem;">
+                                View Artifact
+                            </a>
+                            {% if ev.evidence_type == 'poster' and ev.access_level == 'public_notice' %}
+                                <a href="{{ url_for('download_case_poster', complaint_id=complaint.id, evidence_id=ev.id) }}" class="btn btn-sm btn-success" style="font-size: 0.78rem;">
+                                    Download Notice
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center py-4 text-secondary small">
+                No evidence or derived artifacts attached to this case.
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- =====================================================================
+         CASE AUDIT TIMELINE
+         ===================================================================== -->
+    <div class="card glass-card p-4" style="background: var(--bg-surface); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-lg);">
+        <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom border-secondary">
+            <span class="fs-5 text-info"><i class="fa-solid fa-clock-rotate-left"></i></span>
+            <h5 class="fw-bold text-light mb-0">Case Audit Timeline</h5>
+        </div>
+        {% if timeline_entries %}
+            <div class="timeline-stream d-flex flex-column gap-3">
+                {% for entry in timeline_entries %}
+                <div class="p-3" style="background: rgba(15, 20, 25, 0.5); border-left: 3px solid var(--accent-secondary); border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold text-light small text-uppercase" style="letter-spacing: 0.5px;">{{ entry.event_type|replace('_', ' ') }}</span>
+                        <span class="small text-muted" style="font-size: 0.75rem;">{{ entry.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+                    </div>
+                    <div class="text-secondary small mb-1">{{ entry.message or 'No additional notes' }}</div>
+                    <div class="d-flex justify-content-between align-items-center small text-muted" style="font-size: 0.72rem;">
+                        <span>Actor: {{ entry.actor.full_name or entry.actor.username if entry.actor else 'System' }}</span>
+                        {% if entry.previous_status and entry.new_status %}
+                            <span><code>{{ entry.previous_status }}</code> &rarr; <code>{{ entry.new_status }}</code></span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center py-4 text-secondary small">
+                No timeline records registered yet.
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

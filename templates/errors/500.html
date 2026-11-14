@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+
+{% block title %}ThirdEye | 500 — System Error{% endblock %}
+
+{% block meta_description %}
+<meta name="description" content="ThirdEye — 500 Internal System Error. An internal processing error occurred.">
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="glass-card text-center p-5 mx-auto" style="max-width: 620px; border: 1px solid rgba(255, 170, 0, 0.35);">
+        <div class="mb-4">
+            <span class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width: 90px; height: 90px; background: rgba(255, 170, 0, 0.12); border: 1px solid rgba(255, 170, 0, 0.5);">
+                <i class="fa-solid fa-triangle-exclamation text-warning" style="font-size: 2.8rem;"></i>
+            </span>
+        </div>
+        <h1 class="display-5 fw-bold text-light mb-2">500 — Internal Processing Error</h1>
+        <p class="text-secondary fs-6 mb-4">
+            A temporary internal computation anomaly occurred. Our security guardrails prevented data exposure and isolated the transaction safely.
+        </p>
+        <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="{{ url_for('home') }}" class="btn btn-outline-info px-4 py-2 fw-semibold">
+                <i class="fa-solid fa-house me-2"></i> Return to Safe Workspace
+            </a>
+            <button type="button" class="btn btn-outline-secondary px-4 py-2 fw-semibold" onclick="window.location.reload()">
+                <i class="fa-solid fa-rotate me-2"></i> Retry Request
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
