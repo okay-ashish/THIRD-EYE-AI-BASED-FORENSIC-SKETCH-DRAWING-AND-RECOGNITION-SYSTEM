@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Upgrade pip and install CPU-optimized PyTorch first (avoids multi-gigabyte CUDA bloat)
-RUN pip install --no-cache-dir --upgrade pip setuptools<82 wheel && \
+RUN pip install --no-cache-dir --upgrade pip "setuptools<82" wheel && \
     pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Copy and install Python dependencies
