@@ -1962,6 +1962,7 @@ def download_poster(filename):
 
 # --- PHASE 3 & 4: COMPLAINT WORKFLOW ROUTES ---
 @app.route('/my-complaints')
+@app.route('/my_complaints')
 @login_required
 @user_required
 def my_complaints():
@@ -1997,6 +1998,51 @@ def my_complaints():
         query=query,
         selected_status=status_filter
     )
+
+
+@app.route('/complaints/<int:complaint_id>/delete', methods=['POST'])
+@login_required
+@user_required
+def delete_complaint(complaint_id):
+    """
+    Deletes an unsubmitted draft complaint owned by the current citizen.
+    Submitted cases and active investigations are strictly protected.
+    """
+    user_id = session.get('user_id')
+    complaint = Complaint.query.get(complaint_id)
+    if not complaint:
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Complaint record not found.'}), 404
+        flash('Complaint record not found.', 'danger')
+        return redirect(url_for('my_complaints'))
+
+    if complaint.created_by_id != user_id:
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Unauthorized: You do not own this complaint.'}), 403
+        flash("Unauthorized: You cannot delete another citizen's complaint.", 'danger')
+        return redirect(url_for('my_complaints'))
+
+    if complaint.status != 'draft':
+        msg = f"Submitted complaints ({complaint.complaint_number}) are legally registered and cannot be deleted by citizens. Please contact your investigating officer or station administration."
+        if request.is_json:
+            return jsonify({'success': False, 'error': msg}), 400
+        flash(msg, 'warning')
+        return redirect(url_for('my_complaints'))
+
+    try:
+        from services.complaint_service import delete_draft_complaint
+        comp_num = delete_draft_complaint(complaint_id, user_id)
+        success_msg = f"Draft complaint {comp_num} was permanently deleted."
+        if request.is_json:
+            return jsonify({'success': True, 'message': success_msg, 'complaint_number': comp_num})
+        flash(success_msg, 'success')
+    except Exception as e:
+        err_msg = f"Failed to delete draft: {str(e)}"
+        if request.is_json:
+            return jsonify({'success': False, 'error': err_msg}), 400
+        flash(err_msg, 'danger')
+
+    return redirect(url_for('my_complaints'))
 
 
 @app.route('/complaints/<int:complaint_id>/respond', methods=['GET', 'POST'])

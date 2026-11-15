@@ -496,3 +496,62 @@ def remove_evidence_file(complaint_id, evidence_id, user_id):
             pass
 
     return True
+
+
+def delete_draft_complaint(complaint_id, user_id):
+    """
+    Safely deletes a citizen's draft complaint and all associated evidence files and timeline records.
+    Enforces ownership and ensures submitted/active complaints cannot be deleted.
+    """
+    complaint = Complaint.query.get(complaint_id)
+    if not complaint:
+        raise ValueError(f"Complaint {complaint_id} not found.")
+    if complaint.created_by_id != user_id:
+        raise PermissionError("Unauthorized: You do not own this complaint.")
+    if complaint.status != 'draft':
+        raise ValueError(f"Submitted complaints ({complaint.complaint_number}) cannot be deleted.")
+
+    complaint_number = complaint.complaint_number
+    root = get_case_storage_root()
+    case_dir = os.path.abspath(os.path.join(root, complaint_number))
+
+    # 1. Gather all attached evidence files for physical removal
+    evidence_records = ComplaintEvidence.query.filter_by(complaint_id=complaint.id).all()
+    files_to_unlink = []
+    for ev in evidence_records:
+        if ev.storage_path:
+            rel = ev.storage_path.replace('case_storage/', '').replace('\\', '/')
+            abs_path = os.path.abspath(os.path.join(root, rel))
+            if os.path.commonpath([root, abs_path]) == root:
+                files_to_unlink.append(abs_path)
+
+    # 2. Database deletion in an atomic transaction
+    try:
+        # Delete evidence records first to satisfy FK constraints
+        for ev in evidence_records:
+            db.session.delete(ev)
+        # Delete timeline entries
+        ComplaintTimeline.query.filter_by(complaint_id=complaint.id).delete()
+        # Delete complaint
+        db.session.delete(complaint)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        raise e
+
+    # 3. Clean up physical files and case directory only after DB commit succeeds
+    for fpath in files_to_unlink:
+        if os.path.isfile(fpath):
+            try:
+                os.unlink(fpath)
+            except OSError:
+                pass
+
+    if os.path.isdir(case_dir) and os.path.commonpath([root, case_dir]) == root:
+        try:
+            import shutil
+            shutil.rmtree(case_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+    return complaint_number

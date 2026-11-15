@@ -70,7 +70,7 @@
                                 <th class="py-3">Incident Date</th>
                                 <th class="py-3">Status</th>
                                 <th class="py-3">Assigned Officer</th>
-                                <th class="text-end pe-4 py-3">Action</th>
+                                <th class="text-end pe-4 py-3" style="min-width: 220px;">Investigation Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -124,24 +124,64 @@
                                         <span class="text-muted">Unassigned</span>
                                     {% endif %}
                                 </td>
-                                <td class="text-end pe-4 py-3">
-                                    {% if c.status == 'draft' %}
-                                        <a href="{{ url_for('edit_complaint', complaint_id=c.id) }}" class="btn btn-sm btn-outline-info">
-                                            Resume Draft &rarr;
-                                        </a>
-                                    {% elif c.status == 'information_requested' %}
-                                        <a href="{{ url_for('respond_information_request', complaint_id=c.id) }}" class="btn btn-sm btn-warning text-dark fw-bold">
-                                            Respond to Request &rarr;
-                                        </a>
-                                    {% elif c.status in ['approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence', 'closed', 'rejected'] %}
-                                        <a href="{{ url_for('case_workspace', complaint_id=c.id) }}" class="btn btn-sm btn-neon-primary" style="padding: 6px 16px; font-size: 0.82rem;">
-                                            Case Workspace &rarr;
-                                        </a>
-                                    {% else %}
-                                        <a href="{{ url_for('case_workspace', complaint_id=c.id) }}" class="btn btn-sm btn-outline-secondary" style="font-size: 0.82rem;">
-                                            Case Status &rarr;
-                                        </a>
-                                    {% endif %}
+                                <td class="text-end pe-4 py-3" style="min-width: 220px;">
+                                    <div class="d-inline-flex align-items-center justify-content-end gap-2 flex-wrap">
+                                        {% if c.status == 'draft' %}
+                                            <a href="{{ url_for('edit_complaint', complaint_id=c.id) }}" class="btn btn-sm btn-outline-info">
+                                                Resume Draft &rarr;
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-delete-complaint" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#deleteComplaintModal" 
+                                                    data-complaint-id="{{ c.id }}" 
+                                                    data-complaint-number="{{ c.complaint_number }}"
+                                                    data-complaint-title="{{ c.title or '(Draft Untitled)' }}"
+                                                    title="Delete draft {{ c.complaint_number }}"
+                                                    aria-label="Delete draft {{ c.complaint_number }}">
+                                                <i class="fa-solid fa-trash-can me-1"></i> Delete
+                                            </button>
+                                        {% elif c.status == 'information_requested' %}
+                                            <a href="{{ url_for('respond_information_request', complaint_id=c.id) }}" class="btn btn-sm btn-warning text-dark fw-bold">
+                                                Respond to Request &rarr;
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-delete-disabled" 
+                                                    disabled 
+                                                    aria-disabled="true"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-placement="top"
+                                                    title="Submitted complaints cannot be deleted by citizens.">
+                                                <i class="fa-solid fa-trash-can me-1"></i> Delete
+                                            </button>
+                                        {% elif c.status in ['approved', 'assigned', 'investigation_in_progress', 'awaiting_further_evidence', 'closed', 'rejected'] %}
+                                            <a href="{{ url_for('case_workspace', complaint_id=c.id) }}" class="btn btn-sm btn-neon-primary" style="padding: 6px 16px; font-size: 0.82rem;">
+                                                Case Workspace &rarr;
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-delete-disabled" 
+                                                    disabled 
+                                                    aria-disabled="true"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-placement="top"
+                                                    title="Official case records cannot be deleted.">
+                                                <i class="fa-solid fa-trash-can me-1"></i> Delete
+                                            </button>
+                                        {% else %}
+                                            <a href="{{ url_for('case_workspace', complaint_id=c.id) }}" class="btn btn-sm btn-outline-secondary" style="font-size: 0.82rem;">
+                                                Case Status &rarr;
+                                            </a>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-delete-disabled" 
+                                                    disabled 
+                                                    aria-disabled="true"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-placement="top"
+                                                    title="Submitted complaints cannot be deleted by citizens.">
+                                                <i class="fa-solid fa-trash-can me-1"></i> Delete
+                                            </button>
+                                        {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -164,4 +204,69 @@
         </div>
     </div>
 </div>
+
+<!-- Delete Complaint Confirmation Modal -->
+<div class="modal fade" id="deleteComplaintModal" tabindex="-1" aria-labelledby="deleteComplaintModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card border-danger" style="background: var(--bg-surface-strong); border-radius: var(--border-radius-md); box-shadow: var(--glass-shadow);">
+            <div class="modal-header border-bottom border-danger-subtle">
+                <h5 class="modal-title text-danger fw-bold" id="deleteComplaintModalLabel">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>Delete Draft?
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="deleteComplaintForm" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body py-4">
+                    <p class="mb-2 text-primary" style="font-size: 1rem;">
+                        Are you sure you want to delete complaint <strong id="modalComplaintNumber" class="text-info fw-bold font-monospace"></strong>?
+                    </p>
+                    <p class="small text-danger mb-0">
+                        <i class="fa-solid fa-circle-exclamation me-1"></i> This action cannot be undone. All draft data and associated temporary files will be permanently removed.
+                    </p>
+                </div>
+                <div class="modal-footer border-top border-secondary-subtle">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger fw-bold" id="confirmDeleteBtn">
+                        <i class="fa-solid fa-trash-can me-1"></i> Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteModal = document.getElementById('deleteComplaintModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+            const complaintId = button.getAttribute('data-complaint-id');
+            const complaintNumber = button.getAttribute('data-complaint-number');
+            
+            const modalComplaintNumber = document.getElementById('modalComplaintNumber');
+            const form = document.getElementById('deleteComplaintForm');
+            
+            if (modalComplaintNumber) {
+                modalComplaintNumber.textContent = complaintNumber || ('#' + complaintId);
+            }
+            if (form) {
+                form.action = '/complaints/' + encodeURIComponent(complaintId) + '/delete';
+            }
+        });
+    }
+
+    // Initialize Bootstrap tooltips for disabled delete buttons
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function(tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+});
+</script>
 {% endblock %}
