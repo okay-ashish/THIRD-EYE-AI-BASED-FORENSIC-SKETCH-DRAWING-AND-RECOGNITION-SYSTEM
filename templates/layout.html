@@ -76,7 +76,7 @@
                         <span class="nav-section-label">Citizen Services</span>
                         <form method="POST" action="{{ url_for('new_complaint') }}" class="m-0 p-0">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <button type="submit" class="sidebar-link w-100 text-start {% if request.endpoint in ['new_complaint', 'edit_complaint', 'complaint_confirmation'] %}active{% endif %}" style="background:none; border:none; color:inherit; font:inherit; cursor:pointer;">
+                            <button type="submit" class="sidebar-link w-100 text-start {% if request.endpoint in ['new_complaint', 'edit_complaint', 'complaint_confirmation'] %}active{% endif %}" aria-label="File a new incident complaint">
                                 <span class="link-icon"><i class="fa-solid fa-file-pen"></i></span>
                                 <span>File Complaint</span>
                             </button>
@@ -126,7 +126,7 @@
                     </div>
                     <form method="POST" action="{{ url_for('logout') }}" class="m-0 p-0 w-100">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <button type="submit" class="btn-sidebar-logout w-100" style="background:none; border:none; text-align:left; cursor:pointer; font:inherit;">
+                        <button type="submit" class="btn-sidebar-logout w-100" aria-label="Sign out of ThirdEye">
                             <span class="link-icon me-2"><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
                             <span>Logout</span>
                         </button>
