@@ -112,7 +112,7 @@ def create_draft_complaint(user_id, initial_data=None):
     Creates a new complaint in 'draft' status owned by the authenticated citizen.
     Allows incomplete details.
     """
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         raise ValueError(f"User with ID {user_id} not found.")
     if user.role != 'user':

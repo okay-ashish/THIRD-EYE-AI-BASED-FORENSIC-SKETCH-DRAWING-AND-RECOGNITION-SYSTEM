@@ -201,6 +201,36 @@ def handle_server_error(e):
         return jsonify({'error': 'Internal server error', 'code': 500}), 500
     return render_template('errors/500.html'), 500
 
+@app.before_request
+def validate_session_user():
+    """
+    Validates that any user_id stored in the session exists in the database.
+    If the database was reinitialized or the user was removed, clears the stale session
+    and redirects unauthenticated requests cleanly to login.
+    """
+    user_id = session.get('user_id')
+    if user_id is not None:
+        try:
+            user = db.session.get(User, user_id)
+        except Exception:
+            user = None
+
+        if not user:
+            session.clear()
+            flash('Your session has expired or the user account is no longer valid. Please log in again.', 'warning')
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.path.startswith('/api/'):
+                return jsonify({'error': 'Session expired or invalid', 'code': 401}), 401
+
+            exempt_endpoints = {'static', 'login', 'register', 'favicon'}
+            is_exempt_path = request.path.startswith(('/static/', '/login', '/register', '/favicon.ico'))
+            if (request.endpoint not in exempt_endpoints) and not is_exempt_path:
+                return redirect(url_for('login'))
+        else:
+            session['username'] = user.username
+            session['role'] = user.role
+            clean_name = user.full_name.strip() if (user.full_name and user.full_name.strip()) else None
+            session['full_name'] = clean_name
+
 @app.after_request
 def apply_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -226,8 +256,18 @@ def favicon():
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
+        user_id = session.get('user_id')
+        if not user_id:
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'error': 'Authentication required'}), 401
             flash('Please log in to access this page.', 'danger')
+            return redirect(url_for('login'))
+        user = db.session.get(User, user_id)
+        if not user:
+            session.clear()
+            flash('Your session has expired or the user account is no longer valid. Please log in again.', 'warning')
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'error': 'Authentication required'}), 401
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
@@ -235,7 +275,16 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session or session.get('role') != 'admin':
+        user_id = session.get('user_id')
+        if not user_id:
+            flash('Please log in to access this page.', 'danger')
+            return redirect(url_for('login'))
+        user = db.session.get(User, user_id)
+        if not user:
+            session.clear()
+            flash('Your session has expired. Please log in again.', 'warning')
+            return redirect(url_for('login'))
+        if user.role != 'admin':
             flash('You do not have permission to access this page.', 'danger')
             return redirect(url_for('home'))
         return f(*args, **kwargs)
@@ -244,12 +293,20 @@ def admin_required(f):
 def user_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
+        user_id = session.get('user_id')
+        if not user_id:
             if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'error': 'Authentication required'}), 401
             flash('Please log in to access this page.', 'danger')
             return redirect(url_for('login'))
-        if session.get('role') != 'user':
+        user = db.session.get(User, user_id)
+        if not user:
+            session.clear()
+            flash('Your session has expired. Please log in again.', 'warning')
+            if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'error': 'Authentication required'}), 401
+            return redirect(url_for('login'))
+        if user.role != 'user':
             if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'error': 'Forbidden: Only citizen accounts may submit complaints.'}), 403
             flash('Only citizen user accounts may submit complaints.', 'danger')
@@ -260,22 +317,34 @@ def user_required(f):
 # --- SETUP COMMAND ---
 @app.cli.command("init-db")
 def init_db_command():
-    """Creates the database tables and provisions an admin if credentials are provided."""
+    """Creates the database tables and provisions default admin and citizen accounts if configured."""
     db.create_all()
+
+    # 1. Admin provisioning
     admin_user = os.environ.get('THIRDEYE_ADMIN_USER', 'admin')
     admin_pass = os.environ.get('THIRDEYE_ADMIN_PASSWORD')
-    if not admin_pass:
-        print("Database tables initialized.")
-        print("Notice: Admin account not created because THIRDEYE_ADMIN_PASSWORD is not set.")
-        print("To provision an admin, set THIRDEYE_ADMIN_PASSWORD or run: python create_admin.py")
-        return
-    if not User.query.filter_by(username=admin_user).first():
-        new_admin = User(username=admin_user, password=admin_pass, role='admin', full_name='System Administrator')
-        db.session.add(new_admin)
-        db.session.commit()
-        print(f'Initialized database and created admin user: {admin_user}')
+    if admin_pass:
+        if not User.query.filter_by(username=admin_user).first():
+            new_admin = User(username=admin_user, password=admin_pass, role='admin', full_name='System Administrator')
+            db.session.add(new_admin)
+            db.session.commit()
+            print(f'Initialized database and created admin user: {admin_user}')
+        else:
+            print(f'Database tables verified. Admin user {admin_user} already exists.')
     else:
-        print(f'Database tables verified. Admin user {admin_user} already exists.')
+        print("Notice: Admin account not created because THIRDEYE_ADMIN_PASSWORD is not set.")
+
+    # 2. Citizen provisioning (ensures a usable citizen account is ready out of the box)
+    citizen_user = os.environ.get('THIRDEYE_CITIZEN_USER', 'citizen')
+    citizen_pass = os.environ.get('THIRDEYE_CITIZEN_PASSWORD', 'CitizenPass@2026')
+    if citizen_pass:
+        if not User.query.filter_by(username=citizen_user).first():
+            new_citizen = User(username=citizen_user, password=citizen_pass, role='user', full_name='Citizen Demo')
+            db.session.add(new_citizen)
+            db.session.commit()
+            print(f'Initialized database and created citizen user: {citizen_user}')
+        else:
+            print(f'Database tables verified. Citizen user {citizen_user} already exists.')
 
 # --- MAIN & AUTHENTICATION ROUTES ---
 @app.route('/')
@@ -283,9 +352,14 @@ def init_db_command():
 def home():
     user_stats = None
     if 'user_id' in session:
-        if session.get('role') == 'admin':
+        user = db.session.get(User, session['user_id'])
+        if not user:
+            session.clear()
+            flash('Your session has expired or the user account is no longer valid. Please log in again.', 'warning')
+            return redirect(url_for('login'))
+        if user.role == 'admin':
             return redirect(url_for('admin_dashboard'))
-        user_stats = get_user_dashboard_stats(session['user_id'])
+        user_stats = get_user_dashboard_stats(user.id)
     return render_template('home.html', user_stats=user_stats)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -2094,8 +2168,15 @@ def respond_information_request(complaint_id):
 @user_required
 def new_complaint():
     """Start or resume a citizen crime complaint draft."""
+    user_id = session.get('user_id')
+    user = db.session.get(User, user_id) if user_id else None
+    if not user:
+        session.clear()
+        flash('Your session has expired or the account was not found. Please log in again.', 'warning')
+        return redirect(url_for('login'))
+
     existing_draft = Complaint.query.filter_by(
-        created_by_id=session['user_id'],
+        created_by_id=user.id,
         status='draft'
     ).order_by(Complaint.updated_at.desc()).first()
 
@@ -2103,11 +2184,23 @@ def new_complaint():
     if request.method == 'GET':
         if existing_draft and request.args.get('fresh') != '1':
             return redirect(url_for('edit_complaint', complaint_id=existing_draft.id))
-        return render_template('home.html', user_stats=get_user_dashboard_stats(session['user_id']), prompt_new_complaint=True)
+        return render_template('home.html', user_stats=get_user_dashboard_stats(user.id), prompt_new_complaint=True)
 
     # POST: CSRF-protected complaint draft creation
-    complaint = create_draft_complaint(session['user_id'])
-    return redirect(url_for('edit_complaint', complaint_id=complaint.id))
+    try:
+        complaint = create_draft_complaint(user.id)
+        return redirect(url_for('edit_complaint', complaint_id=complaint.id))
+    except ValueError as e:
+        app.logger.warning(f"Draft creation value error for user {user.id}: {e}")
+        flash(f"Unable to create draft: {e}", "warning")
+        return redirect(url_for('home'))
+    except PermissionError as e:
+        flash(f"Permission denied: {e}", "danger")
+        return redirect(url_for('home'))
+    except Exception as e:
+        app.logger.error(f"Unexpected error creating draft complaint for user {user.id}: {e}", exc_info=True)
+        flash("An unexpected error occurred while initializing your complaint draft. Please try again.", "danger")
+        return redirect(url_for('home'))
 
 
 @app.route('/complaints/<int:complaint_id>/edit', methods=['GET'])
