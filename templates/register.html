@@ -51,30 +51,54 @@
                 <label for="password" class="form-label" style="font-weight: 500; font-size: 0.88rem; color: var(--text-secondary);">
                     Password
                 </label>
-                <input
-                    type="password"
-                    class="form-control glass-input"
-                    id="password"
-                    name="password"
-                    autocomplete="new-password"
-                    placeholder="Create a password"
-                    required
-                >
+                <div class="password-input-group position-relative">
+                    <input
+                        type="password"
+                        class="form-control glass-input"
+                        id="password"
+                        name="password"
+                        autocomplete="new-password"
+                        placeholder="Create a password"
+                        required
+                    >
+                    <button
+                        type="button"
+                        class="password-toggle-btn"
+                        id="toggleRegisterPasswordBtn"
+                        aria-label="Show password"
+                        title="Show password"
+                        onclick="togglePasswordVisibility('password', 'toggleRegisterPasswordBtn', 'toggleRegisterPasswordIcon')"
+                    >
+                        <i class="fa-regular fa-eye" id="toggleRegisterPasswordIcon"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="mb-4">
                 <label for="confirm_password" class="form-label" style="font-weight: 500; font-size: 0.88rem; color: var(--text-secondary);">
                     Confirm Password
                 </label>
-                <input
-                    type="password"
-                    class="form-control glass-input"
-                    id="confirm_password"
-                    name="confirm_password"
-                    autocomplete="new-password"
-                    placeholder="Confirm your password"
-                    required
-                >
+                <div class="password-input-group position-relative">
+                    <input
+                        type="password"
+                        class="form-control glass-input"
+                        id="confirm_password"
+                        name="confirm_password"
+                        autocomplete="new-password"
+                        placeholder="Confirm your password"
+                        required
+                    >
+                    <button
+                        type="button"
+                        class="password-toggle-btn"
+                        id="toggleConfirmPasswordBtn"
+                        aria-label="Show confirm password"
+                        title="Show confirm password"
+                        onclick="togglePasswordVisibility('confirm_password', 'toggleConfirmPasswordBtn', 'toggleConfirmPasswordIcon')"
+                    >
+                        <i class="fa-regular fa-eye" id="toggleConfirmPasswordIcon"></i>
+                    </button>
+                </div>
             </div>
 
             <button type="submit" class="btn-neon-primary w-100" style="padding: 12px; font-size: 0.95rem;">
@@ -87,4 +111,35 @@
         </div>
     </div>
 </div>
+
+<script>
+function togglePasswordVisibility(inputId, btnId, iconId) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    const icon = document.getElementById(iconId);
+    if (!input) return;
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (btn) {
+            btn.setAttribute('aria-label', 'Hide ' + (inputId === 'confirm_password' ? 'confirm password' : 'password'));
+            btn.setAttribute('title', 'Hide ' + (inputId === 'confirm_password' ? 'confirm password' : 'password'));
+        }
+        if (icon) {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        }
+    } else {
+        input.type = 'password';
+        if (btn) {
+            btn.setAttribute('aria-label', 'Show ' + (inputId === 'confirm_password' ? 'confirm password' : 'password'));
+            btn.setAttribute('title', 'Show ' + (inputId === 'confirm_password' ? 'confirm password' : 'password'));
+        }
+        if (icon) {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+}
+</script>
 {% endblock %}

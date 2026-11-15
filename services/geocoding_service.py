@@ -101,6 +101,16 @@ LOCAL_LANDMARKS = [
 # Major Regional Urban Centers & Centroids for Offline / Fallback Reverse Geocoding
 REGIONAL_CENTROIDS = [
     {
+        "keywords": ["kathua", "kathua district"],
+        "name": "Kathua",
+        "display_name": "Kathua, Kathua district, Jammu and Kashmir, 184101, India",
+        "short_name": "Kathua",
+        "lat": 32.376552,
+        "lon": 75.524304,
+        "radius_m": 25000,
+        "type": "city"
+    },
+    {
         "keywords": ["solapur", "sholapur"],
         "name": "Solapur",
         "display_name": "Solapur, Maharashtra, India",
@@ -212,13 +222,45 @@ def search_locations(query, limit=5):
         return _SEARCH_CACHE[cache_key]
 
     results = []
-
-    # 1. Match against Curated Local Institutional Landmarks & Regional Hubs
     clean_lower = clean_q.lower()
+
+    exact_matches = []
+    partial_matches = []
+
+    # Priority 1: Exact matches against Regional Centroids (e.g. user typed "Vijayapura", "Solapur", "Jammu", "Kathua")
+    for centroid in REGIONAL_CENTROIDS:
+        for kw in centroid["keywords"]:
+            if clean_lower == kw:
+                exact_matches.append({
+                    "display_name": centroid["display_name"],
+                    "short_name": centroid["short_name"],
+                    "lat": centroid["lat"],
+                    "lon": centroid["lon"],
+                    "type": centroid["type"],
+                    "source": "regional"
+                })
+                break
+
+    # Priority 2: Exact matches on Curated Local Landmarks (e.g. user typed "Ashram Road", "BLDEACET")
     for landmark in LOCAL_LANDMARKS:
         for kw in landmark["keywords"]:
-            if kw in clean_lower or clean_lower in kw:
-                results.append({
+            if clean_lower == kw:
+                if not any(r["display_name"] == landmark["display_name"] for r in exact_matches):
+                    exact_matches.append({
+                        "display_name": landmark["display_name"],
+                        "short_name": landmark["short_name"],
+                        "lat": landmark["lat"],
+                        "lon": landmark["lon"],
+                        "type": landmark["type"],
+                        "source": "local"
+                    })
+                break
+
+    # Priority 3: Partial substring matches on Local Landmarks & Regional Centroids
+    for landmark in LOCAL_LANDMARKS:
+        for kw in landmark["keywords"]:
+            if (kw in clean_lower or clean_lower in kw) and not any(r["display_name"] == landmark["display_name"] for r in exact_matches + partial_matches):
+                partial_matches.append({
                     "display_name": landmark["display_name"],
                     "short_name": landmark["short_name"],
                     "lat": landmark["lat"],
@@ -227,28 +269,23 @@ def search_locations(query, limit=5):
                     "source": "local"
                 })
                 break
-        if len(results) >= limit:
-            break
 
-    # Also match regional centroids if query aligns
     for centroid in REGIONAL_CENTROIDS:
         for kw in centroid["keywords"]:
-            if kw == clean_lower or clean_lower in kw:
-                # Deduplicate if already present
-                if not any(r["short_name"].lower() == centroid["short_name"].lower() for r in results):
-                    results.append({
-                        "display_name": centroid["display_name"],
-                        "short_name": centroid["short_name"],
-                        "lat": centroid["lat"],
-                        "lon": centroid["lon"],
-                        "type": centroid["type"],
-                        "source": "regional"
-                    })
+            if (kw in clean_lower or clean_lower in kw) and not any(r["display_name"] == centroid["display_name"] for r in exact_matches + partial_matches):
+                partial_matches.append({
+                    "display_name": centroid["display_name"],
+                    "short_name": centroid["short_name"],
+                    "lat": centroid["lat"],
+                    "lon": centroid["lon"],
+                    "type": centroid["type"],
+                    "source": "regional"
+                })
                 break
-        if len(results) >= limit:
-            break
 
-    # 2. Query OpenStreetMap Nominatim for Indian & Global Addresses
+    results = exact_matches + partial_matches
+
+    # 4. Query OpenStreetMap Nominatim for Indian & Global Addresses
     try:
         _throttle_request()
         headers = {"User-Agent": USER_AGENT}
@@ -261,40 +298,47 @@ def search_locations(query, limit=5):
         resp = requests.get(NOMINATIM_SEARCH_URL, params=params, headers=headers, timeout=8)
         if resp.status_code == 200:
             osm_items = resp.json()
-            for item in osm_items:
-                try:
-                    lat_f = float(item.get("lat"))
-                    lon_f = float(item.get("lon"))
-                    d_name = item.get("display_name", "")
-                    addr = item.get("address", {})
-                    # Build a concise short name
-                    short_name = (
-                        addr.get("city") or
-                        addr.get("town") or
-                        addr.get("village") or
-                        addr.get("suburb") or
-                        addr.get("county") or
-                        d_name.split(",")[0]
-                    )
+            if isinstance(osm_items, list):
+                for item in osm_items:
+                    try:
+                        lat_f = float(item.get("lat"))
+                        lon_f = float(item.get("lon"))
+                        d_name = item.get("display_name", "")
+                        addr = item.get("address", {})
+                        # Build a concise short name
+                        short_name = (
+                            addr.get("city") or
+                            addr.get("town") or
+                            addr.get("village") or
+                            addr.get("suburb") or
+                            addr.get("county") or
+                            d_name.split(",")[0]
+                        )
 
-                    # Deduplicate if very close to already matched landmark
-                    is_duplicate = False
-                    for r in results:
-                        if _haversine_distance_m(lat_f, lon_f, r["lat"], r["lon"]) < 200:
-                            is_duplicate = True
-                            break
+                        # Deduplicate if very close to already matched landmark
+                        is_duplicate = False
+                        for r in results:
+                            if _haversine_distance_m(lat_f, lon_f, r["lat"], r["lon"]) < 200 or r["display_name"].lower() == d_name.lower():
+                                is_duplicate = True
+                                break
 
-                    if not is_duplicate:
-                        results.append({
-                            "display_name": d_name,
-                            "short_name": short_name,
-                            "lat": lat_f,
-                            "lon": lon_f,
-                            "type": item.get("type", "location"),
-                            "source": "nominatim"
-                        })
-                except (ValueError, TypeError):
-                    continue
+                        if not is_duplicate:
+                            results.append({
+                                "display_name": d_name,
+                                "short_name": short_name,
+                                "lat": lat_f,
+                                "lon": lon_f,
+                                "type": item.get("type", "location"),
+                                "source": "nominatim"
+                            })
+                    except (ValueError, TypeError):
+                        continue
+        else:
+            logger.warning(f"Nominatim search returned HTTP {resp.status_code} for '{clean_q}'")
+    except requests.exceptions.Timeout:
+        logger.warning(f"Nominatim search timed out for '{clean_q}'")
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Nominatim network error for '{clean_q}': {e}")
     except Exception as e:
         logger.warning(f"Nominatim search failed for '{clean_q}': {e}")
 
@@ -313,12 +357,14 @@ def reverse_geocode(lat, lon):
         "display_name": str,
         "lat": float,
         "lon": float,
-        "source": "local_proximity" | "nominatim" | "fallback"
+        "source": "local_proximity" | "nominatim" | "regional_proximity" | "fallback" | "error"
     }
     """
     try:
         lat_f = float(lat)
         lon_f = float(lon)
+        if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0):
+            raise ValueError("Coordinates out of range")
     except (ValueError, TypeError):
         return {
             "display_name": "Invalid coordinates",
@@ -358,27 +404,34 @@ def reverse_geocode(lat, lon):
         resp = requests.get(NOMINATIM_REVERSE_URL, params=params, headers=headers, timeout=8)
         if resp.status_code == 200:
             data = resp.json()
-            d_name = data.get("display_name")
-            if d_name:
-                res = {
-                    "display_name": d_name,
-                    "lat": lat_f,
-                    "lon": lon_f,
-                    "source": "nominatim"
-                }
-                if len(_REVERSE_CACHE) >= _MAX_CACHE_SIZE:
-                    _REVERSE_CACHE.pop(next(iter(_REVERSE_CACHE)))
-                _REVERSE_CACHE[cache_key] = res
-                return res
+            if isinstance(data, dict):
+                d_name = data.get("display_name")
+                if d_name:
+                    res = {
+                        "display_name": d_name,
+                        "lat": lat_f,
+                        "lon": lon_f,
+                        "source": "nominatim"
+                    }
+                    if len(_REVERSE_CACHE) >= _MAX_CACHE_SIZE:
+                        _REVERSE_CACHE.pop(next(iter(_REVERSE_CACHE)))
+                    _REVERSE_CACHE[cache_key] = res
+                    return res
+        else:
+            logger.warning(f"Nominatim reverse geocode returned HTTP {resp.status_code} for ({lat_f}, {lon_f})")
+    except requests.exceptions.Timeout:
+        logger.warning(f"Nominatim reverse geocode timed out for ({lat_f}, {lon_f})")
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Nominatim reverse geocode network error for ({lat_f}, {lon_f}): {e}")
     except Exception as e:
         logger.warning(f"Nominatim reverse geocode failed for ({lat_f}, {lon_f}): {e}")
 
     # 3. Check proximity to Regional Urban Centroids (if Nominatim is slow/unreachable)
     for centroid in REGIONAL_CENTROIDS:
         dist = _haversine_distance_m(lat_f, lon_f, centroid["lat"], centroid["lon"])
-        if dist <= centroid.get("radius_m", 20000):
+        if dist <= centroid.get("radius_m", 25000):
             res = {
-                "display_name": f"{centroid['display_name']} ({lat_f:.4f}°N, {lon_f:.4f}°E)",
+                "display_name": f"{centroid['display_name']} (GPS: {lat_f:.4f}°N, {lon_f:.4f}°E)",
                 "lat": lat_f,
                 "lon": lon_f,
                 "source": "regional_proximity",
@@ -388,7 +441,7 @@ def reverse_geocode(lat, lon):
             return res
 
     # 4. Fallback for coordinates far from mapped regional centers
-    fallback_name = f"Location at {lat_f:.6f}°N, {lon_f:.6f}°E"
+    fallback_name = f"Location Pin ({lat_f:.6f}°N, {lon_f:.6f}°E)"
     res = {
         "display_name": fallback_name,
         "lat": lat_f,

@@ -1698,6 +1698,7 @@ function reverseGeocodeAndSetLocation(lat, lon, source, zoom) {
     const roundLon = parseFloat(lon).toFixed(6);
 
     const displayEl = document.getElementById('selected_location_display');
+    const statusBox = document.getElementById('location_search_status');
     if (displayEl) {
         displayEl.innerHTML = '<span class="text-info"><i class="fa-solid fa-spinner fa-spin me-1"></i> Resolving address from coordinates...</span>';
     }
@@ -1708,12 +1709,19 @@ function reverseGeocodeAndSetLocation(lat, lon, source, zoom) {
             return response.json();
         })
         .then(data => {
-            const addr = data.display_name || `Location at ${roundLat}, ${roundLon}`;
+            const addr = (data && data.display_name && data.source !== 'error')
+                ? data.display_name
+                : `Map Pin at ${roundLat}, ${roundLon}`;
             setMapLocation(lat, lon, addr, source, zoom);
         })
         .catch(err => {
-            console.warn("Reverse geocode failed, using raw coordinates:", err);
-            setMapLocation(lat, lon, `Location at ${roundLat}, ${roundLon}`, source, zoom);
+            console.warn("Reverse geocode failed, using pin coordinates:", err);
+            setMapLocation(lat, lon, `Map Pin at ${roundLat}, ${roundLon}`, source, zoom);
+            if (statusBox) {
+                statusBox.textContent = "Unable to resolve street address for this pin. You may enter or edit the location name manually.";
+                statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
+                statusBox.classList.remove('d-none');
+            }
         });
 }
 
@@ -1903,13 +1911,18 @@ function locateDevicePosition() {
 
             // Fetch reverse geocoded human-readable address
             fetch(`/api/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error("Reverse geocode failed with HTTP " + r.status);
+                    return r.json();
+                })
                 .then(data => {
                     if (btn) {
                         btn.innerHTML = origBtnHtml;
                         btn.disabled = false;
                     }
-                    const readableAddress = data.display_name || `Location at ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                    const readableAddress = (data && data.display_name && data.source !== 'error')
+                        ? data.display_name
+                        : `Current Device GPS (${lat.toFixed(6)}, ${lon.toFixed(6)})`;
                     setMapLocation(lat, lon, readableAddress, 'device', 16);
                     showToast('Current GPS location & readable address captured.', 'success');
                 })
@@ -1919,7 +1932,12 @@ function locateDevicePosition() {
                         btn.disabled = false;
                     }
                     console.warn("Reverse geocode on current location failed:", err);
-                    setMapLocation(lat, lon, `Location at ${lat.toFixed(6)}, ${lon.toFixed(6)}`, 'device', 16);
+                    setMapLocation(lat, lon, `Current Device GPS (${lat.toFixed(6)}, ${lon.toFixed(6)})`, 'device', 16);
+                    if (statusBox) {
+                        statusBox.textContent = "GPS coordinates captured, but address service was temporarily unreachable. You may verify or edit the location name manually.";
+                        statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
+                        statusBox.classList.remove('d-none');
+                    }
                     showToast('Current GPS coordinates captured.', 'info');
                 });
         },
