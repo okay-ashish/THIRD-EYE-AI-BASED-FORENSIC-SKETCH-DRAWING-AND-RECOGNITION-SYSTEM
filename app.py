@@ -237,7 +237,7 @@ def apply_security_headers(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    response.headers['Permissions-Policy'] = 'geolocation=(self), camera=(), microphone=()'
+    response.headers['Permissions-Policy'] = 'geolocation=(self), camera=(), microphone=(self)'
     return response
 
 @app.context_processor

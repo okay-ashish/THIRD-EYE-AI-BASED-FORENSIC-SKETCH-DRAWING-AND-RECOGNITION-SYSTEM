@@ -241,6 +241,59 @@
     gap: 6px;
 }
 
+.recording-dot {
+    width: 9px;
+    height: 9px;
+    background-color: #EF4444;
+    border-radius: 50%;
+    display: inline-block;
+    animation: blinkRec 1s infinite ease-in-out;
+}
+
+@keyframes blinkRec {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.8); }
+}
+
+.audio-recorder-card {
+    background: var(--bg-surface-strong, rgba(15, 20, 25, 0.45));
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--border-radius-md);
+    transition: all 0.2s ease;
+}
+
+html[data-resolved-theme="light"] .audio-recorder-card,
+html[data-theme="light"] .audio-recorder-card {
+    background: #F8FAFC !important;
+    border: 1px solid #CBD5E1 !important;
+}
+
+html[data-resolved-theme="light"] .speech-toolbar,
+html[data-theme="light"] .speech-toolbar {
+    background: #F8FAFC !important;
+    border: 1px solid #CBD5E1 !important;
+}
+
+html[data-resolved-theme="light"] .speech-btn,
+html[data-theme="light"] .speech-btn {
+    background: #E6F4FF !important;
+    border: 1px solid #91CAFF !important;
+    color: #0958D9 !important;
+}
+
+html[data-resolved-theme="light"] .speech-btn:hover,
+html[data-theme="light"] .speech-btn:hover {
+    background: #BAE0FF !important;
+    border-color: #1677FF !important;
+}
+
+html[data-resolved-theme="light"] #confirmAttachAudioModal .modal-content,
+html[data-theme="light"] #confirmAttachAudioModal .modal-content {
+    background: #FFFFFF !important;
+    border: 1px solid #CBD5E1 !important;
+    color: #0F172A !important;
+}
+
 /* Map Container */
 #incidentMap {
     height: 300px;
@@ -912,11 +965,11 @@ html[data-theme="light"] #btnUseCurrentLocation:hover {
 
                     <!-- Speech Toolbar -->
                     <div class="speech-toolbar">
-                        <button type="button" class="speech-btn" id="micToggleBtn" onclick="toggleSpeechRecognition()">
+                        <button type="button" class="speech-btn" id="micToggleBtn" onclick="toggleSpeechRecognition()" aria-pressed="false">
                             <i class="fa-solid fa-microphone me-1" id="micIcon"></i>
                             <span id="micText">Start Dictation</span>
                         </button>
-                        <select class="form-select glass-input form-select-sm d-inline-block w-auto" id="speechLangSelect">
+                        <select class="form-select glass-input form-select-sm d-inline-block w-auto" id="speechLangSelect" aria-label="Select dictation language">
                             <option value="en-IN" selected>English (India) [en-IN]</option>
                             <option value="en-US">English (US) [en-US]</option>
                             <option value="hi-IN">Hindi [hi-IN]</option>
@@ -924,17 +977,18 @@ html[data-theme="light"] #btnUseCurrentLocation:hover {
                         <span class="speech-status-indicator" id="speechStatusText" style="display: none;">
                             <span class="spinner-grow spinner-grow-sm text-info" role="status"></span>
                             <span>Listening... Speak into microphone</span>
+                            <span id="interimSpeechPreview" class="text-muted ms-1 fst-italic"></span>
                         </span>
                     </div>
 
                     <!-- Speech Privacy Notice -->
                     <div class="field-hint mb-2" style="font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: flex-start; gap: 6px;">
                         <i class="fa-solid fa-shield-halved mt-1" style="font-size: 0.9rem; color: var(--accent-secondary);"></i>
-                        <span><strong>Speech Privacy Notice:</strong> Browser speech recognition may process audio through your browser or an external speech service and may require internet access, depending on your browser. ThirdEye does not retain original speech audio or transmit it to external speech APIs. Manual typing is always supported.</span>
+                        <span><strong>Speech Privacy Notice:</strong> Browser speech recognition converts spoken words into text locally or via browser-provided speech services. ThirdEye does not retain speech audio from dictation. Manual typing is always supported.</span>
                     </div>
 
-                    <!-- Speech Error / Browser Notice -->
-                    <div class="alert alert-warning py-2 px-3 small d-none" id="speechErrorAlert"></div>
+                    <!-- Speech Error / Notice Alert Banner -->
+                    <div class="alert alert-warning py-2 px-3 small d-none" id="speechErrorAlert" role="alert"></div>
 
                     <textarea class="form-control glass-input" id="narrative" name="narrative" rows="6" required
                               placeholder="Detail the sequence of events, what transpired, actions observed, suspect behavior, etc...">{{ complaint.narrative or '' }}</textarea>
@@ -942,26 +996,60 @@ html[data-theme="light"] #btnUseCurrentLocation:hover {
                 </div>
 
                 <!-- Optional Audio Note Recording -->
-                <div class="mb-3 p-3" style="background: rgba(15, 20, 25, 0.45); border: 1px solid var(--border-glass-subtle); border-radius: var(--border-radius-md);">
+                <div class="mb-3 p-3 audio-recorder-card">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-semibold text-light small"><i class="fa-solid fa-microphone me-2 text-info"></i>Optional Supporting Audio Note</span>
-                        <span class="small text-muted">Separate explicit recording</span>
+                        <span class="fw-semibold text-light small">
+                            <i class="fa-solid fa-microphone-lines me-2 text-info"></i>Optional Supporting Audio Note
+                        </span>
+                        <span class="badge" style="background: rgba(0, 206, 201, 0.12); color: var(--accent-secondary); font-size: 0.7rem; border: 1px solid var(--border-glass);">Private Evidence</span>
                     </div>
+
+                    <p class="small text-secondary mb-2" style="font-size: 0.8rem;">
+                        Record a voice note describing the incident. The audio remains on your device until you review and explicitly choose to attach it.
+                    </p>
+
+                    <!-- In-card Audio Note Alert Banner -->
+                    <div class="alert alert-warning py-2 px-3 small d-none mb-2" id="audioNoteAlert" role="alert"></div>
+
+                    <!-- Audio Controls Area -->
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                        <button type="button" class="btn btn-sm btn-outline-info" id="recordAudioBtn" onclick="toggleAudioRecorder()">
-                            <i class="fa-solid fa-circle me-1 text-danger"></i> <span id="recordAudioText">Record Audio Note</span>
+                        <!-- Idle State Button -->
+                        <button type="button" class="btn btn-sm btn-outline-info" id="recordAudioBtn" onclick="startAudioRecording()">
+                            <i class="fa-solid fa-circle text-danger me-1"></i> <span>Record Audio Note</span>
                         </button>
-                        <div id="audioPlaybackBox" class="d-none d-flex align-items-center gap-2">
-                            <audio id="audioPlayback" controls style="height: 32px;"></audio>
-                            <button type="button" class="btn btn-sm btn-outline-success" onclick="uploadRecordedAudio()">
-                                Attach to Evidence
+
+                        <!-- Live Recording Controls (Shown while recording) -->
+                        <div id="recordingControlsBox" class="d-none d-flex align-items-center gap-2">
+                            <span class="recording-badge d-flex align-items-center gap-2 px-2 py-1 rounded" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #EF4444; font-size: 0.82rem; font-weight: 600;">
+                                <span class="recording-dot"></span>
+                                <span>REC</span>
+                                <span id="recordingTimer" style="font-variant-numeric: tabular-nums;">00:00</span>
+                                <span class="small text-muted" style="font-weight: 400;">/ 02:00</span>
+                            </span>
+                            <button type="button" class="btn btn-sm btn-danger" id="stopRecordBtn" onclick="stopAudioRecording()">
+                                <i class="fa-solid fa-stop me-1"></i> Stop Recording
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="discardRecordedAudio()">
-                                Discard
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="cancelRecordBtn" onclick="cancelAudioRecording()">
+                                <i class="fa-solid fa-xmark me-1"></i> Cancel
+                            </button>
+                        </div>
+
+                        <!-- Review / Playback State (Shown after stopping) -->
+                        <div id="audioPlaybackBox" class="d-none d-flex flex-wrap align-items-center gap-2">
+                            <span class="badge" id="recordedDurationBadge" style="background: rgba(9, 132, 227, 0.15); color: var(--accent-primary); border: 1px solid var(--border-glass); padding: 6px 10px; font-size: 0.78rem;">
+                                <i class="fa-solid fa-headphones me-1"></i> Audio Note Ready
+                            </span>
+                            <audio id="audioPlayback" controls style="height: 34px; max-width: 250px;"></audio>
+                            <button type="button" class="btn btn-sm btn-success" id="attachAudioBtn" onclick="confirmAttachAudio()">
+                                <i class="fa-solid fa-paperclip me-1"></i> Attach to Evidence
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="discardAudioBtn" onclick="discardRecordedAudio()">
+                                <i class="fa-solid fa-trash me-1"></i> Discard
                             </button>
                         </div>
                     </div>
-                    <div class="field-hint">Audio notes are attached as private evidence only upon your explicit confirmation.</div>
+
+                    <div class="field-hint" style="font-size: 0.75rem;">Audio notes are attached as private evidence only upon your explicit confirmation.</div>
                 </div>
 
                 <div class="wizard-actions-bar">
@@ -1389,6 +1477,48 @@ html[data-theme="light"] #btnUseCurrentLocation:hover {
         </div>
 
     </form>
+
+    <!-- Modal for Explicit Confirmation Before Uploading Audio Note -->
+    <div class="modal fade" id="confirmAttachAudioModal" tabindex="-1" aria-labelledby="confirmAttachAudioModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card" style="border: 1px solid var(--border-glass); background: var(--bg-surface-strong);">
+                <div class="modal-header" style="border-bottom: 1px solid var(--border-glass-subtle);">
+                    <h5 class="modal-title fw-bold text-light" id="confirmAttachAudioModalLabel" style="font-size: 1.05rem;">
+                        <i class="fa-solid fa-file-audio me-2 text-info"></i>Attach Audio Note to Evidence
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-3">
+                    <p class="text-light small mb-2">
+                        Are you sure you want to attach this recorded audio note to complaint <strong>{{ complaint.complaint_number }}</strong>?
+                    </p>
+                    <div class="p-2 mb-2 rounded small" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-glass-subtle);">
+                        <div class="d-flex justify-content-between text-secondary mb-1">
+                            <span>Classification:</span>
+                            <span class="text-info fw-semibold">Private Case Evidence</span>
+                        </div>
+                        <div class="d-flex justify-content-between text-secondary mb-1">
+                            <span>Format:</span>
+                            <span class="text-light" id="modalAudioFormat">audio/webm</span>
+                        </div>
+                        <div class="d-flex justify-content-between text-secondary">
+                            <span>Duration &amp; Size:</span>
+                            <span class="text-light" id="modalAudioDuration">00:00</span>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0" style="font-size: 0.75rem;">
+                        This recording will be stored in your private case directory with cryptographic integrity verification. It is accessible only to you and authorized investigators.
+                    </p>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid var(--border-glass-subtle);">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-success" id="confirmUploadAudioBtn" onclick="executeUploadRecordedAudio()">
+                        <i class="fa-solid fa-check me-1"></i> Confirm &amp; Attach
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -1457,6 +1587,14 @@ document.addEventListener("DOMContentLoaded", function() {
 // =========================================================================
 function goToStep(step) {
     if (step < 1 || step > 5) return;
+
+    // Clean up microphone tracks if navigating away from step 2
+    if (currentStep === 2 && step !== 2) {
+        if (typeof stopSpeechRecognition === 'function') stopSpeechRecognition();
+        if (typeof stopAudioRecording === 'function' && typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') {
+            stopAudioRecording();
+        }
+    }
 
     // Hide all panels
     for (let i = 1; i <= 5; i++) {
@@ -1891,9 +2029,8 @@ function locateDevicePosition() {
             statusBox.textContent = "Geolocation is not supported by your browser.";
             statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
             statusBox.classList.remove('d-none');
-        } else {
-            alert("Geolocation is not supported by your browser.");
         }
+        showToast("Geolocation is not supported by your browser.", 'warning');
         return;
     }
 
@@ -1959,9 +2096,8 @@ function locateDevicePosition() {
                 statusBox.textContent = userMsg;
                 statusBox.className = "alert alert-warning py-2 px-3 small mb-3";
                 statusBox.classList.remove('d-none');
-            } else {
-                alert(userMsg);
             }
+            showToast(userMsg, 'warning');
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -2030,6 +2166,60 @@ function resetMapMarker() {
 // =========================================================================
 // WEB SPEECH RECOGNITION (DICTATION)
 // =========================================================================
+let speechRecognizer = null;
+let isListening = false;
+let speechBaseText = '';
+let speechSessionFinal = '';
+
+function isSpeechRecognitionSupported() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function updateSpeechUI(listening) {
+    const micBtn = document.getElementById('micToggleBtn');
+    const micIcon = document.getElementById('micIcon');
+    const micText = document.getElementById('micText');
+    const statusText = document.getElementById('speechStatusText');
+    const preview = document.getElementById('interimSpeechPreview');
+
+    if (listening) {
+        if (micBtn) {
+            micBtn.classList.add('recording');
+            micBtn.setAttribute('aria-pressed', 'true');
+        }
+        if (micIcon) micIcon.className = 'fa-solid fa-microphone-slash me-1';
+        if (micText) micText.textContent = 'Stop Dictation';
+        if (statusText) statusText.style.display = 'inline-flex';
+        if (preview) preview.textContent = '';
+    } else {
+        if (micBtn) {
+            micBtn.classList.remove('recording');
+            micBtn.setAttribute('aria-pressed', 'false');
+        }
+        if (micIcon) micIcon.className = 'fa-solid fa-microphone me-1';
+        if (micText) micText.textContent = 'Start Dictation';
+        if (statusText) statusText.style.display = 'none';
+        if (preview) preview.textContent = '';
+    }
+}
+
+function showSpeechError(msg, toastType = 'warning') {
+    const errBox = document.getElementById('speechErrorAlert');
+    if (errBox) {
+        errBox.textContent = msg;
+        errBox.classList.remove('d-none');
+    }
+    showToast(msg, toastType);
+}
+
+function clearSpeechError() {
+    const errBox = document.getElementById('speechErrorAlert');
+    if (errBox) {
+        errBox.textContent = '';
+        errBox.classList.add('d-none');
+    }
+}
+
 function toggleSpeechRecognition() {
     if (isListening) {
         stopSpeechRecognition();
@@ -2039,46 +2229,87 @@ function toggleSpeechRecognition() {
 }
 
 function startSpeechRecognition() {
+    clearSpeechError();
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const errBox = document.getElementById('speechErrorAlert');
-    errBox.classList.add('d-none');
 
     if (!SpeechRecognition) {
-        errBox.textContent = "Speech recognition is not supported in this browser. Please type the narrative manually.";
-        errBox.classList.remove('d-none');
+        showSpeechError("Speech recognition is unavailable in this browser. You can still enter your complaint narrative by typing manually.");
         return;
+    }
+
+    // Stop audio note recorder if actively recording to prevent microphone conflict
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopAudioRecording();
     }
 
     try {
         speechRecognizer = new SpeechRecognition();
-        speechRecognizer.lang = document.getElementById('speechLangSelect').value || 'en-IN';
+        const langSelect = document.getElementById('speechLangSelect');
+        speechRecognizer.lang = (langSelect && langSelect.value) ? langSelect.value : 'en-IN';
         speechRecognizer.continuous = true;
         speechRecognizer.interimResults = true;
+        speechRecognizer.maxAlternatives = 1;
+
+        const narrativeBox = document.getElementById('narrative');
+        speechBaseText = narrativeBox ? narrativeBox.value : '';
+        speechSessionFinal = '';
 
         speechRecognizer.onstart = function() {
             isListening = true;
-            document.getElementById('micToggleBtn').classList.add('recording');
-            document.getElementById('micText').textContent = "Stop Dictation";
-            document.getElementById('speechStatusText').style.display = 'inline-flex';
+            updateSpeechUI(true);
         };
 
         speechRecognizer.onresult = function(event) {
-            let finalTranscript = '';
+            let currentInterim = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript + ' ';
+                const res = event.results[i];
+                if (res.isFinal) {
+                    const text = res[0].transcript.trim();
+                    if (text) {
+                        const currentVal = narrativeBox ? narrativeBox.value : '';
+                        const needsSpace = currentVal.length > 0 && !currentVal.endsWith(' ') && !currentVal.endsWith('\n');
+                        const added = (needsSpace ? ' ' : '') + text;
+                        if (narrativeBox) {
+                            narrativeBox.value = currentVal + added;
+                            narrativeBox.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                        const rawBox = document.getElementById('transcription_raw');
+                        if (rawBox) {
+                            rawBox.value = (rawBox.value ? rawBox.value + ' ' : '') + text;
+                        }
+                    }
+                } else {
+                    currentInterim += res[0].transcript;
                 }
             }
-            if (finalTranscript) {
-                const narrativeBox = document.getElementById('narrative');
-                narrativeBox.value = (narrativeBox.value + ' ' + finalTranscript).trim();
-                document.getElementById('transcription_raw').value += finalTranscript;
+            const preview = document.getElementById('interimSpeechPreview');
+            if (preview) {
+                preview.textContent = currentInterim ? `("${currentInterim.trim()}")` : '';
             }
         };
 
         speechRecognizer.onerror = function(event) {
-            errBox.textContent = `Speech recognition notice: ${event.error}. You can continue by typing manually.`;
-            errBox.classList.remove('d-none');
+            let msg = '';
+            switch (event.error) {
+                case 'not-allowed':
+                case 'service-not-allowed':
+                    msg = "Microphone access is blocked. Please allow microphone permission in your browser settings and try again.";
+                    break;
+                case 'no-speech':
+                    msg = "No speech was detected. Please verify your microphone and speak clearly, or type manually.";
+                    break;
+                case 'audio-capture':
+                    msg = "No microphone was detected. Connect a microphone or continue by typing manually.";
+                    break;
+                case 'network':
+                    msg = "Speech recognition network service is currently unreachable. You can continue by typing manually.";
+                    break;
+                case 'aborted':
+                    return;
+                default:
+                    msg = "Speech recognition service notice. You can continue typing your narrative manually.";
+            }
+            showSpeechError(msg, 'warning');
             stopSpeechRecognition();
         };
 
@@ -2088,8 +2319,7 @@ function startSpeechRecognition() {
 
         speechRecognizer.start();
     } catch (e) {
-        errBox.textContent = `Could not start speech recognition: ${e.message}`;
-        errBox.classList.remove('d-none');
+        showSpeechError("Unable to initialize speech recognition. You can continue by typing manually.");
         stopSpeechRecognition();
     }
 }
@@ -2097,55 +2327,281 @@ function startSpeechRecognition() {
 function stopSpeechRecognition() {
     isListening = false;
     if (speechRecognizer) {
-        try { speechRecognizer.stop(); } catch(e) {}
+        try {
+            speechRecognizer.onend = null;
+            speechRecognizer.onerror = null;
+            speechRecognizer.stop();
+        } catch(e) {}
+        speechRecognizer = null;
     }
-    document.getElementById('micToggleBtn').classList.remove('recording');
-    document.getElementById('micText').textContent = "Start Dictation";
-    document.getElementById('speechStatusText').style.display = 'none';
+    updateSpeechUI(false);
 }
 
 // =========================================================================
 // OPTIONAL AUDIO NOTE RECORDER
 // =========================================================================
-async function toggleAudioRecorder() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-        document.getElementById('recordAudioText').textContent = "Record Audio Note";
-        document.getElementById('recordAudioBtn').classList.remove('btn-danger');
-        document.getElementById('recordAudioBtn').classList.add('btn-outline-info');
-    } else {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert("Microphone recording is not supported in this browser.");
-            return;
+let audioStream = null;
+let recordingTimerInterval = null;
+let recordingDurationSeconds = 0;
+const MAX_RECORDING_SECONDS = 120; // 2 minutes max
+let currentAudioBlob = null;
+let currentAudioMime = 'audio/webm';
+let currentAudioUrl = null;
+
+function showAudioNoteAlert(msg, type = 'warning') {
+    const alertBox = document.getElementById('audioNoteAlert');
+    if (alertBox) {
+        alertBox.textContent = msg;
+        alertBox.className = `alert alert-${type} py-2 px-3 small mb-2`;
+        alertBox.classList.remove('d-none');
+    }
+    showToast(msg, type);
+}
+
+function clearAudioNoteAlert() {
+    const alertBox = document.getElementById('audioNoteAlert');
+    if (alertBox) {
+        alertBox.textContent = '';
+        alertBox.classList.add('d-none');
+    }
+}
+
+function formatDuration(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function getSupportedAudioMimeType() {
+    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+        return 'audio/webm';
+    }
+    const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+    ];
+    for (const c of candidates) {
+        if (MediaRecorder.isTypeSupported(c)) return c;
+    }
+    return '';
+}
+
+async function startAudioRecording() {
+    clearAudioNoteAlert();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+        showAudioNoteAlert("Microphone recording is not supported in this browser. You can still type your complaint or upload audio files directly in Step 4.");
+        return;
+    }
+
+    if (isListening) {
+        stopSpeechRecognition();
+    }
+
+    try {
+        audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true
+            }
+        });
+    } catch (err) {
+        let errorMsg = "Unable to start audio recording. Please check your microphone connection and permissions.";
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'SecurityError') {
+            errorMsg = "Microphone access is blocked. Please allow microphone permission in your browser settings and try again.";
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            errorMsg = "No microphone was detected. Connect a microphone or continue by typing manually.";
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            errorMsg = "Your microphone is currently unavailable or being used by another application.";
+        } else if (err.name === 'OverconstrainedError') {
+            errorMsg = "Requested microphone settings are unavailable on this device.";
         }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioChunks = [];
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                document.getElementById('audioPlayback').src = audioUrl;
+        showAudioNoteAlert(errorMsg, 'warning');
+        return;
+    }
+
+    try {
+        const mimeType = getSupportedAudioMimeType();
+        const options = mimeType ? { mimeType } : {};
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(audioStream, options);
+        currentAudioMime = mediaRecorder.mimeType || mimeType || 'audio/webm';
+
+        mediaRecorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) {
+                audioChunks.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = function() {
+            if (audioStream) {
+                audioStream.getTracks().forEach(t => t.stop());
+                audioStream = null;
+            }
+
+            if (audioChunks.length > 0) {
+                currentAudioBlob = new Blob(audioChunks, { type: currentAudioMime });
+                if (currentAudioUrl) {
+                    URL.revokeObjectURL(currentAudioUrl);
+                }
+                currentAudioUrl = URL.createObjectURL(currentAudioBlob);
+
+                const audioElem = document.getElementById('audioPlayback');
+                if (audioElem) audioElem.src = currentAudioUrl;
+
+                const badge = document.getElementById('recordedDurationBadge');
+                if (badge) {
+                    badge.innerHTML = `<i class="fa-solid fa-headphones me-1"></i> Audio Note (${formatDuration(recordingDurationSeconds)})`;
+                }
+
+                document.getElementById('recordingControlsBox').classList.add('d-none');
                 document.getElementById('audioPlaybackBox').classList.remove('d-none');
-                stream.getTracks().forEach(t => t.stop());
-            };
-            mediaRecorder.start();
-            document.getElementById('recordAudioText').textContent = "Stop Recording";
-            document.getElementById('recordAudioBtn').classList.remove('btn-outline-info');
-            document.getElementById('recordAudioBtn').classList.add('btn-danger');
-        } catch (e) {
-            alert("Microphone permission denied or audio device unavailable.");
+                document.getElementById('recordAudioBtn').classList.add('d-none');
+            } else {
+                resetAudioRecorderUI();
+            }
+        };
+
+        mediaRecorder.start(250);
+        recordingDurationSeconds = 0;
+
+        document.getElementById('recordAudioBtn').classList.add('d-none');
+        document.getElementById('audioPlaybackBox').classList.add('d-none');
+        document.getElementById('recordingControlsBox').classList.remove('d-none');
+        document.getElementById('recordingTimer').textContent = "00:00";
+
+        if (recordingTimerInterval) clearInterval(recordingTimerInterval);
+        recordingTimerInterval = setInterval(() => {
+            recordingDurationSeconds++;
+            const timerElem = document.getElementById('recordingTimer');
+            if (timerElem) timerElem.textContent = formatDuration(recordingDurationSeconds);
+
+            if (recordingDurationSeconds >= MAX_RECORDING_SECONDS) {
+                stopAudioRecording();
+                showToast("Maximum recording duration (2 minutes) reached.", "info");
+            }
+        }, 1000);
+
+    } catch (e) {
+        if (audioStream) {
+            audioStream.getTracks().forEach(t => t.stop());
+            audioStream = null;
+        }
+        showAudioNoteAlert("Could not start audio recorder. Please try again or upload an audio file directly in Step 4.");
+        resetAudioRecorderUI();
+    }
+}
+
+function stopAudioRecording() {
+    if (recordingTimerInterval) {
+        clearInterval(recordingTimerInterval);
+        recordingTimerInterval = null;
+    }
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        try {
+            mediaRecorder.stop();
+        } catch(e) {}
+    }
+}
+
+function cancelAudioRecording() {
+    if (recordingTimerInterval) {
+        clearInterval(recordingTimerInterval);
+        recordingTimerInterval = null;
+    }
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        try {
+            mediaRecorder.onstop = null;
+            mediaRecorder.stop();
+        } catch(e) {}
+    }
+    if (audioStream) {
+        audioStream.getTracks().forEach(t => t.stop());
+        audioStream = null;
+    }
+    audioChunks = [];
+    currentAudioBlob = null;
+    resetAudioRecorderUI();
+    showToast("Audio recording cancelled.", "info");
+}
+
+function resetAudioRecorderUI() {
+    const recordBtn = document.getElementById('recordAudioBtn');
+    const recBox = document.getElementById('recordingControlsBox');
+    const playBox = document.getElementById('audioPlaybackBox');
+
+    if (recordBtn) recordBtn.classList.remove('d-none');
+    if (recBox) recBox.classList.add('d-none');
+    if (playBox) playBox.classList.add('d-none');
+
+    const audioElem = document.getElementById('audioPlayback');
+    if (audioElem) audioElem.src = '';
+    if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl);
+        currentAudioUrl = null;
+    }
+}
+
+function discardRecordedAudio() {
+    audioChunks = [];
+    currentAudioBlob = null;
+    resetAudioRecorderUI();
+    showToast("Audio note discarded.", "info");
+}
+
+function confirmAttachAudio() {
+    if (!currentAudioBlob || audioChunks.length === 0) {
+        showAudioNoteAlert("No recorded audio note found. Please record a voice note first.", "warning");
+        return;
+    }
+
+    const formatElem = document.getElementById('modalAudioFormat');
+    if (formatElem) {
+        formatElem.textContent = currentAudioMime.split(';')[0];
+    }
+    const durationElem = document.getElementById('modalAudioDuration');
+    if (durationElem) {
+        durationElem.textContent = `${formatDuration(recordingDurationSeconds)} (${(currentAudioBlob.size / 1024).toFixed(1)} KB)`;
+    }
+
+    const modalEl = document.getElementById('confirmAttachAudioModal');
+    if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    } else {
+        if (confirm("Attach this recorded audio note as private case evidence?")) {
+            executeUploadRecordedAudio();
         }
     }
 }
 
-async function uploadRecordedAudio() {
-    if (audioChunks.length === 0) return;
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+async function executeUploadRecordedAudio() {
+    if (!currentAudioBlob) return;
+
+    const modalEl = document.getElementById('confirmAttachAudioModal');
+    if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }
+
+    const attachBtn = document.getElementById('attachAudioBtn');
+    const origHtml = attachBtn ? attachBtn.innerHTML : '';
+    if (attachBtn) {
+        attachBtn.disabled = true;
+        attachBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Attaching...';
+    }
+
+    let fileExt = '.webm';
+    if (currentAudioMime.includes('mp4')) fileExt = '.mp4';
+    else if (currentAudioMime.includes('ogg')) fileExt = '.ogg';
+    else if (currentAudioMime.includes('wav')) fileExt = '.wav';
+
+    const filename = `audio_note_${Date.now()}${fileExt}`;
     const formData = new FormData();
     formData.append('csrf_token', CSRF_TOKEN);
-    formData.append('evidence_files', audioBlob, 'recorded_audio_note.webm');
+    formData.append('evidence_files', currentAudioBlob, filename);
 
     try {
         const res = await fetch(EVIDENCE_UPLOAD_URL, {
@@ -2158,21 +2614,20 @@ async function uploadRecordedAudio() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            showToast('Audio note attached as case evidence.', 'success');
+            showToast('Audio note attached as private case evidence.', 'success');
             discardRecordedAudio();
             refreshEvidenceList(data.evidence);
         } else {
-            alert(data.error || 'Failed to upload audio.');
+            showAudioNoteAlert(data.error || 'Failed to attach audio note.', 'danger');
         }
     } catch (e) {
-        alert('Upload failed: ' + e.message);
+        showAudioNoteAlert('Failed to attach audio: ' + e.message, 'danger');
+    } finally {
+        if (attachBtn) {
+            attachBtn.disabled = false;
+            attachBtn.innerHTML = origHtml;
+        }
     }
-}
-
-function discardRecordedAudio() {
-    audioChunks = [];
-    document.getElementById('audioPlaybackBox').classList.add('d-none');
-    document.getElementById('audioPlayback').src = '';
 }
 
 // =========================================================================
@@ -2199,7 +2654,7 @@ if (dropzone) {
 async function handleEvidenceUpload(files) {
     if (!files || files.length === 0) return;
     if (files.length > 5) {
-        alert("Maximum 5 files can be uploaded at one time.");
+        showToast("Maximum 5 files can be uploaded at one time.", 'warning');
         return;
     }
 
@@ -2224,10 +2679,10 @@ async function handleEvidenceUpload(files) {
             showToast('Evidence uploaded successfully.', 'success');
             refreshEvidenceList(data.evidence);
         } else {
-            alert(data.error || 'Evidence upload rejected.');
+            showToast(data.error || 'Evidence upload rejected.', 'danger');
         }
     } catch (e) {
-        alert('Upload failed: ' + e.message);
+        showToast('Upload failed: ' + e.message, 'danger');
     }
 }
 
@@ -2295,12 +2750,31 @@ async function deleteEvidenceFile(evidenceId) {
             showToast('Attachment removed.', 'info');
             refreshEvidenceList(data.remaining_evidence);
         } else {
-            alert(data.error || 'Failed to remove file.');
+            showToast(data.error || 'Failed to remove file.', 'danger');
         }
     } catch (e) {
-        alert('Action failed: ' + e.message);
+        showToast('Action failed: ' + e.message, 'danger');
     }
 }
+
+// =========================================================================
+// LIFECYCLE & CLEANUP LISTENERS
+// =========================================================================
+window.addEventListener('beforeunload', function() {
+    if (typeof stopSpeechRecognition === 'function') stopSpeechRecognition();
+    if (typeof audioStream !== 'undefined' && audioStream) {
+        audioStream.getTracks().forEach(t => t.stop());
+        audioStream = null;
+    }
+});
+
+window.addEventListener('pagehide', function() {
+    if (typeof stopSpeechRecognition === 'function') stopSpeechRecognition();
+    if (typeof audioStream !== 'undefined' && audioStream) {
+        audioStream.getTracks().forEach(t => t.stop());
+        audioStream = null;
+    }
+});
 
 // =========================================================================
 // TOAST NOTIFICATION HELPER

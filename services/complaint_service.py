@@ -37,7 +37,7 @@ MAX_FILES_PER_UPLOAD = 5
 ALLOWED_EXTENSIONS = {
     'photo': {'.jpg', '.jpeg', '.png', '.webp'},
     'document': {'.pdf'},
-    'audio': {'.webm', '.ogg', '.wav', '.mp3'},
+    'audio': {'.webm', '.ogg', '.wav', '.mp3', '.m4a', '.mp4'},
 }
 
 ALL_ALLOWED_EXTS = set().union(*ALLOWED_EXTENSIONS.values())
@@ -343,6 +343,10 @@ def validate_file_content(file_bytes, ext):
     elif ext == '.wav':
         if len(file_bytes) < 12 or not (file_bytes.startswith(b'RIFF') and file_bytes[8:12] == b'WAVE'):
             raise ValueError("File content does not match WAV signature.")
+    elif ext in ('.mp4', '.m4a'):
+        # MP4/M4A containers start with a 4-byte box size followed by 'ftyp' at bytes 4-8
+        if len(file_bytes) < 12 or file_bytes[4:8] != b'ftyp':
+            raise ValueError("File content does not match MP4/M4A audio signature.")
 
 
 def determine_evidence_type(ext):
