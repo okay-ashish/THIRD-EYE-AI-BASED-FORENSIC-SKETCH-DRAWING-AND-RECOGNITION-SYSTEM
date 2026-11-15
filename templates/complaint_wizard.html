@@ -2166,8 +2166,6 @@ function resetMapMarker() {
 // =========================================================================
 // WEB SPEECH RECOGNITION (DICTATION)
 // =========================================================================
-let speechRecognizer = null;
-let isListening = false;
 let speechBaseText = '';
 let speechSessionFinal = '';
 
@@ -2629,6 +2627,17 @@ async function executeUploadRecordedAudio() {
         }
     }
 }
+
+// Expose speech and audio functions on window for inline and dynamic button handlers
+window.toggleSpeechRecognition = toggleSpeechRecognition;
+window.startSpeechRecognition = startSpeechRecognition;
+window.stopSpeechRecognition = stopSpeechRecognition;
+window.startAudioRecording = startAudioRecording;
+window.stopAudioRecording = stopAudioRecording;
+window.cancelAudioRecording = cancelAudioRecording;
+window.discardRecordedAudio = discardRecordedAudio;
+window.confirmAttachAudio = confirmAttachAudio;
+window.executeUploadRecordedAudio = executeUploadRecordedAudio;
 
 // =========================================================================
 // EVIDENCE MANAGEMENT & DRAG-AND-DROP
